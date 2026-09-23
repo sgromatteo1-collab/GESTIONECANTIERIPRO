@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07111f">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Cantiere Pro v3.7</title>
+<title>Cantiere Pro v4.1</title>
 <style>
 :root{--bg:#07111f;--panel:#0d1a2b;--panel2:#11233a;--line:#203650;--txt:#edf5ff;--muted:#8ea5bd;--accent:#3ba7ff;--danger:#ff5263;--ok:#4dd49a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -38,7 +38,7 @@ main{min-width:0}.top{min-height:72px;border-bottom:1px solid var(--line);displa
 <body>
 <div class="app">
 <aside>
-<div class="brand">🏗 Cantiere Pro<small>v3.7 · PDF + revisioni</small></div>
+<div class="brand">🏗 Cantiere Pro<small>v4.0 · cantieri + cartelle</small></div>
 <nav>
 <button class="active" data-section="home">⌂ Dashboard</button>
 <button data-section="drawings">📐 Disegni</button>
@@ -96,22 +96,47 @@ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@
 window.pdfjsLib=pdfjsLib;
 const {PDFDocument,rgb}=window.PDFLib;
 
-const KEY="cantiereProV38";
+const KEY="cantiereProV40";
 let stored=JSON.parse(localStorage.getItem(KEY)||"null");
+if(!stored) stored=JSON.parse(localStorage.getItem("cantiereProV38")||"null");
 let store=stored&&Array.isArray(stored.sites)?stored:null;
 let db=null;
-function makeSite(name="Cantiere principale"){return {id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),name,folders:["Disegni principali"],drawings:[],notes:[],photos:[],issues:[],revisions:[]}}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function makeFolder(name,parentId=null){return {id:uid(),name,parentId}}
+function makeSite(name="Cantiere principale"){return {id:uid(),name:String(name||"Cantiere principale"),folders:[makeFolder("Disegni principali")],drawings:[],notes:[],photos:[],issues:[],revisions:[]}}
+function normalizeSite(site){
+  if(!site||typeof site!=="object") return makeSite();
+  site.id=site.id||uid(); site.name=String(site.name||"Cantiere principale");
+  const oldFolders=Array.isArray(site.folders)?site.folders:[];
+  const map={};
+  const folders=[];
+  oldFolders.forEach(f=>{
+    if(typeof f==="string") { const nf=makeFolder(f); map[f]=nf.id; folders.push(nf); }
+    else if(f&&f.name){ const nf={id:f.id||uid(),name:String(f.name),parentId:f.parentId||null}; map[f.name]=nf.id; folders.push(nf); }
+  });
+  if(!folders.length) folders.push(makeFolder("Disegni principali"));
+  if(!folders.some(f=>f.name==="Disegni principali")) folders.unshift(makeFolder("Disegni principali"));
+  site.folders=folders;
+  site.drawings=Array.isArray(site.drawings)?site.drawings:[];
+  site.drawings.forEach(d=>{
+    if(!d.folderId){ const old=d.folder||"Disegni principali"; d.folderId=map[old]||folders.find(f=>f.name===old)?.id||folders[0].id; }
+    d.folderId=d.folderId||folders[0].id;
+  });
+  site.notes=Array.isArray(site.notes)?site.notes:[]; site.photos=Array.isArray(site.photos)?site.photos:[]; site.issues=Array.isArray(site.issues)?site.issues:[]; site.revisions=Array.isArray(site.revisions)?site.revisions:[];
+  return site;
+}
 if(!store){
   const legacy=JSON.parse(localStorage.getItem("cantiereProV32")||"null");
   const site=makeSite(legacy?.site?.name||"Cantiere principale");
   if(legacy){site.drawings=legacy.drawings||[];site.notes=legacy.notes||[];site.photos=legacy.photos||[];site.issues=legacy.issues||[];site.revisions=legacy.revisions||[];}
   store={sites:[site],activeSiteId:site.id};
 }
+store.sites=(store.sites||[]).map(normalizeSite);
 if(!store.sites.length){const site=makeSite();store.sites.push(site);store.activeSiteId=site.id;}
 const activeSiteId=store.activeSiteId||store.sites[0].id;
 db=store.sites.find(x=>x.id===activeSiteId)||store.sites[0];
-if(!Array.isArray(db.folders)||!db.folders.length)db.folders=["Disegni principali"];
-let section="home", current=null, pdfDoc=null, pageNum=1, pageCount=1, scale=1, zoom=1, fitZoom=1, tool="zoom", pendingImportFolder="Disegni principali";
+
+let section="home", current=null, pdfDoc=null, pageNum=1, pageCount=1, scale=1, zoom=1, fitZoom=1, tool="zoom", pendingImportFolder=null;
 let undoStack=[],redoStack=[],activeStroke=null,last={x:0,y:0},start={x:0,y:0},textMode=false;
 
 const $=id=>document.getElementById(id);
@@ -121,7 +146,6 @@ function save(){
   store.activeSiteId=db.id;
   localStorage.setItem(KEY,JSON.stringify(store));
 }
-function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 function toast(t){$("toast").textContent=t;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2600)}
 function openModal(h){$("dialog").innerHTML=h;$("modal").classList.add("show")}
@@ -145,12 +169,15 @@ else if(section==="issues")html+=`<div class="card"><div class="row space"><h2>�
 else if(section==="revisions")html+=`<div class="card"><h2>🔄 Revisioni</h2>${db.revisions.length?db.revisions.slice().reverse().map(r=>`<div class="file card" style="margin:8px 0"><div><strong>${esc(r.name)}</strong><span>${esc(r.base)} · ${esc(r.date)} · ${r.pages||1} pagine</span></div><div class="row"><span class="pill">${esc(r.rev)}</span>${r.data?`<button onclick="downloadData('${r.id}')">Esporta</button>`:""}<button onclick="deleteRevision('${r.id}')" class="danger">Elimina</button></div></div>`).join(""):`<div class="empty">Nessuna revisione.</div>`}</div>`;
 $("content").innerHTML=html;
 }
+function folderById(id){return db.folders.find(f=>f.id===id)||db.folders[0]}
+function folderPath(id){const out=[];let f=folderById(id), guard=0;while(f&&guard++<50){out.unshift(f.name);f=f.parentId?folderById(f.parentId):null}return out.join(" / ")}
+function childFolders(parentId=null){return db.folders.filter(f=>(f.parentId||null)===(parentId||null)).sort((a,b)=>a.name.localeCompare(b.name))}
+function folderTreeHtml(parentId=null,depth=0){return childFolders(parentId).map(f=>{const count=db.drawings.filter(d=>(d.folderId||db.folders[0].id)===f.id).length;return `<div style="padding:8px 0 8px ${depth*22}px;border-bottom:1px solid var(--line)"><div class="row space"><div><strong>📁 ${esc(f.name)}</strong><span>${count} disegni${f.parentId?` · ${esc(folderPath(f.id))}`:""}</span></div>${f.name!=="Disegni principali"?`<button class="danger" onclick="deleteFolder('${f.id}')">Elimina</button>`:""}</div>${folderTreeHtml(f.id,depth+1)}</div>`}).join("")}
 function drawingList(q=""){
- let a=db.drawings.filter(x=>(x.name+" "+x.rev+" "+(x.folder||"")).toLowerCase().includes(q));
- if(!a.length)return `<div class="empty">Nessun PDF. Usa + Disegno per scegliere uno o più PDF, oppure Importa cartella.</div>`;
- const groups={};
- a.forEach(x=>{const g=x.folder||"Disegni principali";(groups[g]??=[]).push(x)});
- return Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0])).map(([folder,items])=>`<div class="card" style="margin:10px 0"><div class="row space"><h3 style="margin:0">📁 ${esc(folder)}</h3><span class="pill">${items.length} PDF</span></div>${items.map(x=>`<div class="file card" style="margin:8px 0;background:#0a1727"><div><strong>${esc(x.name)}</strong><span>${esc(x.rev||"ORIGINALE")} · ${esc(x.size||"")}</span></div><div class="row"><button onclick="openDrawing('${x.id}')">Apri</button><button onclick="exportDrawing('${x.id}')">Esporta</button><button onclick="deleteDrawing('${x.id}')" class="danger">Elimina</button></div></div>`).join("")}</div>`).join("");
+ let a=db.drawings.filter(x=>(x.name+" "+x.rev+" "+folderPath(x.folderId||db.folders[0].id)).toLowerCase().includes(q));
+ if(!a.length)return `<div class="empty">Nessun PDF. Usa “Importa disegni” per scegliere uno o più PDF da File / iCloud Drive.</div>`;
+ const groups={}; a.forEach(x=>{const f=folderById(x.folderId)||db.folders[0];const g=f.id;(groups[g]??=[]).push(x)});
+ return Object.entries(groups).sort((a,b)=>folderPath(a[0]).localeCompare(folderPath(b[0]))).map(([fid,items])=>`<div class="card" style="margin:10px 0"><div class="row space"><h3 style="margin:0">📁 ${esc(folderPath(fid))}</h3><span class="pill">${items.length} PDF</span></div>${items.map(x=>`<div class="file card" style="margin:8px 0;background:#0a1727"><div><strong>${esc(x.name)}</strong><span>${esc(x.rev||"ORIGINALE")} · ${esc(x.size||"")}</span></div><div class="row"><button onclick="openDrawing('${x.id}')">Apri</button><button onclick="moveDrawing('${x.id}')">📁 Sposta</button><button onclick="exportDrawing('${x.id}')">Esporta</button><button onclick="deleteDrawing('${x.id}')" class="danger">Elimina</button></div></div>`).join("")}</div>`).join("");
 }
 function noteList(q=""){let a=db.notes.filter(x=>(x.title+" "+x.text).toLowerCase().includes(q));return a.length?a.slice().reverse().map(x=>`<div class="card" style="margin:8px 0"><div class="row space"><strong>${esc(x.title)}</strong><span class="pill">${esc(x.date)}</span></div><p class="note">${esc(x.text)}</p><button onclick="deleteNote('${x.id}')" class="danger">Elimina</button></div>`).join(""):`<div class="empty">Nessuna nota.</div>`}
 function photoList(q=""){let a=db.photos.filter(x=>(x.name+" "+x.note).toLowerCase().includes(q));return a.length?a.slice().reverse().map(x=>`<div class="card" style="margin:8px 0"><img src="${x.data}" style="max-width:100%;max-height:260px;border-radius:10px;display:block"><p>${esc(x.name)}</p><div class="muted small">${esc(x.date)} · ${esc(x.note||"")}</div></div>`).join(""):`<div class="empty">Nessuna foto.</div>`}
@@ -158,20 +185,20 @@ function issueList(q=""){let a=db.issues.filter(x=>(x.title+" "+x.text+" "+x.sta
 
 function choosePdf(){$("pdfInput").click()}
 $("addPdf").onclick=choosePdf;
-$("importFolder").onclick=()=>$("folderInput").click();
-async function importPdfFiles(files, folder){
+$("importFolder").onclick=openImportFolderChooser;
+$("manageFolders").onclick=manageFolders;
+async function importPdfFiles(files, folderId){
   const list=Array.from(files||[]).filter(f=>/\.pdf$/i.test(f.name));
   if(!list.length){toast("Nessun PDF selezionato");return}
-  const target=folder||pendingImportFolder||"Disegni principali";
-  if(!db.folders.includes(target))db.folders.push(target);
-  for(const f of list){
-    const data=await fileToDataURL(f);
-    db.drawings.push({id:uid(),name:f.name,rev:"ORIGINALE",size:Math.round(f.size/1024)+" KB",folder:target,data});
-  }
-  save();section="drawings";render();toast(`${list.length} disegn${list.length===1?"o":"i"} importat${list.length===1?"o":"i"} in ${target}.`);
+  const targetId=folderId||pendingImportFolder||db.folders[0].id;
+  const target=folderById(targetId)||db.folders[0];
+  for(const f of list){const data=await fileToDataURL(f);db.drawings.push({id:uid(),name:f.name,rev:"ORIGINALE",size:Math.round(f.size/1024)+" KB",folderId:target.id,data});}
+  save();section="drawings";render();toast(`${list.length} disegn${list.length===1?"o":"i"} importat${list.length===1?"o":"i"} in ${folderPath(target.id)}.`);
+  $("pdfInput").value="";
 }
 function fileToDataURL(f){return new Promise((res,rej)=>{let r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
-
+$("pdfInput").addEventListener("change",e=>importPdfFiles(e.target.files,pendingImportFolder));
+$("folderInput").addEventListener("change",e=>importPdfFiles(e.target.files,pendingImportFolder));
 async function openDrawing(id){
 current=db.drawings.find(x=>x.id===id);if(!current)return;
 $("viewerTitle").textContent=current.name+" · "+(current.rev||"ORIGINALE");
@@ -240,7 +267,8 @@ $("redo").onclick=()=>{let i=redoStack.map(x=>x.page).lastIndexOf(pageNum);if(i>
 $("clearInk").onclick=()=>{undoStack=undoStack.filter(x=>x.page!==pageNum);redoStack=[];redraw()}
 $("prevPage").onclick=async()=>{if(pageNum>1){pageNum--;await renderPage()}}
 $("nextPage").onclick=async()=>{if(pageNum<pageCount){pageNum++;await renderPage()}}
-$("closeViewer").onclick=()=>{$("viewer").classList.remove("show");pdfDoc=null;current=null;undoStack=[];redoStack=[]}
+function closeViewer(){$("viewer").classList.remove("show");pdfDoc=null;current=null;undoStack=[];redoStack=[]}
+$("closeViewer").onclick=closeViewer
 
 async function createRevision(){
 if(!current||!pdfDoc)return;
@@ -329,29 +357,31 @@ $("addPhoto").onclick=()=>$("photoInput").click();
 $("photoInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;let data=await fileToDataURL(f);openModal(`<h2>📷 Salva foto</h2><img src="${data}" style="max-width:100%;max-height:280px;border-radius:10px"><div class="field"><label>Descrizione</label><input id="pn" value="${esc(f.name)}"></div><div class="field"><label>Nota</label><textarea id="px"></textarea></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button class="primary" onclick='savePhoto(${JSON.stringify(data)})'>Salva</button></div>`);e.target.value=""}
 function savePhoto(data){db.photos.push({id:uid(),name:$("pn").value||"Foto",note:$("px").value,date:new Date().toLocaleString("it-IT"),data});save();closeModal();render()}
 function deleteDrawing(id){if(!confirm("Eliminare questo disegno dall'app?"))return;db.drawings=db.drawings.filter(x=>x.id!==id);save();render()}
+function moveDrawing(id){const d=db.drawings.find(x=>x.id===id);if(!d)return;openModal(`<h2>📁 Sposta disegno</h2><p class="muted"><b>${esc(d.name)}</b></p><div class="field"><label>Nuova cartella</label><select id="moveTarget">${db.folders.slice().sort((a,b)=>folderPath(a.id).localeCompare(folderPath(b.id))).map(f=>`<option value="${f.id}" ${f.id===(d.folderId||db.folders[0].id)?"selected":""}>📁 ${esc(folderPath(f.id))}</option>`).join('')}</select></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button class="primary" onclick="saveMoveDrawing('${id}')">Sposta qui</button></div>`)}
+function saveMoveDrawing(id){const d=db.drawings.find(x=>x.id===id);if(!d)return;const targetId=$("moveTarget")?.value;if(!targetId)return;d.folderId=targetId;save();closeModal();render();toast(`Disegno spostato in ${folderPath(targetId)}.`)}
 $("siteBtn").onclick=openSites;
-function openSites(){openModal(`<h2>🏗 Gestione cantieri</h2><p class="muted">Crea e seleziona più cantieri. Ogni cantiere mantiene separati disegni, cartelle, note, foto, problemi e revisioni.</p><div class="card" style="margin:10px 0">${store.sites.map(x=>`<div class="file" style="padding:10px 0;border-bottom:1px solid var(--line)"><div><strong>${esc(x.name)}</strong><span>${x.drawings.length} disegni · ${x.folders.length} cartelle</span></div><div class="row">${x.id===db.id?'<span class="pill">ATTIVO</span>':`<button onclick="switchSite('${x.id}')">Apri</button>`}${store.sites.length>1?`<button class="danger" onclick="deleteSite('${x.id}')">Elimina</button>`:''}</div></div>`).join('')}</div><h3>＋ Nuovo cantiere</h3><div class="field"><label>Nome cantiere</label><input id="newSiteName" placeholder="Es. Cantiere Via Roma"></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button><button class="primary" onclick="createSite()">Crea cantiere</button></div>`)}
-function createSite(){const name=$("newSiteName").value.trim()||"Nuovo cantiere";const site=makeSite(name);store.sites.push(site);db=site;save();closeModal();render();toast(`Cantiere "${name}" creato.`)}
+function openSites(){openModal(`<h2>🏗 Gestione cantieri</h2><p class="muted">Crea, rinomina e seleziona i tuoi cantieri. Il nome viene salvato automaticamente.</p><div class="card" style="margin:10px 0">${store.sites.map(x=>`<div class="file" style="padding:10px 0;border-bottom:1px solid var(--line)"><div><strong>${esc(x.name)}</strong><span>${x.drawings.length} disegni · ${x.folders.length} cartelle</span></div><div class="row">${x.id===db.id?'<span class="pill">ATTIVO</span>':`<button onclick="switchSite('${x.id}')">Apri</button>`}<button onclick="renameSite('${x.id}')">Rinomina</button>${store.sites.length>1?`<button class="danger" onclick="deleteSite('${x.id}')">Elimina</button>`:""}</div></div>`).join('')}</div><h3>＋ Nuovo cantiere</h3><div class="field"><label>Nome cantiere</label><input id="newSiteName" placeholder="Es. Cantiere Via Roma"></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button><button class="primary" onclick="createSite()">Crea cantiere</button></div>`)}
+function createSite(){const name=$("newSiteName").value.trim();if(!name){toast("Inserisci il nome del cantiere");return}const site=makeSite(name);store.sites.push(site);db=site;store.activeSiteId=site.id;save();closeModal();render();toast(`Cantiere "${name}" salvato.`)}
+function renameSite(id){const site=store.sites.find(x=>x.id===id);if(!site)return;openModal(`<h2>✏️ Rinomina cantiere</h2><div class="field"><label>Nome cantiere</label><input id="renameSiteName" value="${esc(site.name)}"></div><div class="row" style="justify-content:flex-end"><button onclick="openSites()">Annulla</button><button class="primary" onclick="saveSiteName('${id}')">Salva nome</button></div>`)}
+function saveSiteName(id){const site=store.sites.find(x=>x.id===id);if(!site)return;const n=$("renameSiteName").value.trim();if(!n){toast("Il nome non può essere vuoto");return}site.name=n;if(db.id===id)db=site;save();closeModal();render();toast("Nome cantiere salvato.")}
 function switchSite(id){const site=store.sites.find(x=>x.id===id);if(!site)return;db=site;store.activeSiteId=id;save();closeModal();section="home";render();toast(`Cantiere attivo: ${site.name}`)}
 function deleteSite(id){if(store.sites.length<=1){toast("Devi mantenere almeno un cantiere");return}const site=store.sites.find(x=>x.id===id);if(!site)return;if(!confirm(`Eliminare il cantiere "${site.name}" e tutti i suoi dati?`))return;store.sites=store.sites.filter(x=>x.id!==id);db=store.sites[0];store.activeSiteId=db.id;save();closeModal();render();toast("Cantiere eliminato.")}
-function manageFolders(){openModal(`<h2>📁 Cartelle disegni</h2><p class="muted">Crea le cartelle del cantiere. Quando importi più PDF, scegli in quale cartella inserirli.</p><div class="card">${db.folders.map((f,i)=>`<div class="file" style="padding:9px 0;border-bottom:1px solid var(--line)"><div><strong>📁 ${esc(f)}</strong><span>${db.drawings.filter(d=>(d.folder||"Disegni principali")===f).length} disegni</span></div>${f!=="Disegni principali"?`<button class="danger" onclick="deleteFolder('${encodeURIComponent(f)}')">Elimina</button>`:''}</div>`).join('')}</div><div class="field"><label>Nuova cartella</label><input id="folderName" placeholder="Es. Piante, Prospetti, Strutturali..."></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button><button class="primary" onclick="createFolder()">＋ Crea cartella</button></div>`)}
-function createFolder(){const n=$("folderName").value.trim();if(!n){toast("Inserisci il nome della cartella");return}if(db.folders.includes(n)){toast("Cartella già esistente");return}db.folders.push(n);save();manageFolders();render();toast("Cartella creata.")}
-function deleteFolder(enc){const f=decodeURIComponent(enc);if(f==="Disegni principali")return;if(db.drawings.some(d=>(d.folder||"Disegni principali")===f)){toast("La cartella contiene disegni: spostali prima di eliminarla.");return}db.folders=db.folders.filter(x=>x!==f);save();manageFolders();render()}
-function openImportFolderChooser(){openModal(`<h2>📥 Importa disegni</h2><p class="muted">Su iPad seleziona più PDF dalla stessa cartella di iCloud Drive/Files e Cantiere Pro li inserirà nella cartella che scegli qui.</p><div class="field"><label>Cartella di destinazione</label><select id="importTarget">${db.folders.map(f=>`<option value="${esc(f)}">📁 ${esc(f)}</option>`).join('')}</select></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button onclick="chooseImportFiles()" class="primary">📄 Scegli PDF</button><button onclick="closeModal();manageFolders()">📁 Nuova cartella</button></div>`)}
-function chooseImportFiles(){pendingImportFolder=$("importTarget").value||"Disegni principali";closeModal();choosePdf()}
-$("importFolder").onclick=openImportFolderChooser;
-$("manageFolders").onclick=manageFolders;
-
-$("backupBtn").onclick=()=>{let blob=new Blob([JSON.stringify(db)],{type:"application/json"});downloadBlob(blob,"cantiere-pro-backup.json")}
+function manageFolders(){openModal(`<h2>📁 Cartelle disegni</h2><p class="muted">Puoi creare cartelle e sotto-cartelle. Esempio: <b>Piante → Piano terra → Stato di progetto</b>.</p><div class="card" style="margin-bottom:14px">${folderTreeHtml()||'<div class="empty">Nessuna cartella.</div>'}</div><h3>＋ Nuova cartella / sotto-cartella</h3><div class="field"><label>Nome</label><input id="folderName" placeholder="Es. Piano terra"></div><div class="field"><label>Cartella padre</label><select id="folderParent"><option value="">— Nessuna (cartella principale) —</option>${db.folders.slice().sort((a,b)=>folderPath(a.id).localeCompare(folderPath(b.id))).map(f=>`<option value="${f.id}">${esc(folderPath(f.id))}</option>`).join('')}</select></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button><button class="primary" onclick="createFolder()">＋ Crea cartella</button></div>`)}
+function createFolder(){const n=$("folderName").value.trim();const parentId=$("folderParent").value||null;if(!n){toast("Inserisci il nome della cartella");return}if(db.folders.some(f=>f.name.toLowerCase()===n.toLowerCase()&&(f.parentId||null)===(parentId||null))){toast("Cartella già esistente in questa posizione");return}db.folders.push(makeFolder(n,parentId));save();manageFolders();render();toast(parentId?`Sotto-cartella "${n}" creata.`:`Cartella "${n}" creata.`)}
+function deleteFolder(id){const f=folderById(id);if(!f||f.name==="Disegni principali")return;if(db.folders.some(x=>x.parentId===id)){toast("Prima elimina o sposta le sotto-cartelle.");return}if(db.drawings.some(d=>(d.folderId||db.folders[0].id)===id)){toast("La cartella contiene disegni: spostali prima di eliminarla.");return}db.folders=db.folders.filter(x=>x.id!==id);save();manageFolders();render()}
+function openImportFolderChooser(){openModal(`<h2>📥 Importa disegni</h2><p class="muted">Scegli la cartella interna di Cantiere Pro e poi seleziona uno o più PDF da File / iCloud Drive.</p><div class="field"><label>Cartella di destinazione</label><select id="importTarget">${db.folders.slice().sort((a,b)=>folderPath(a.id).localeCompare(folderPath(b.id))).map(f=>`<option value="${f.id}">📁 ${esc(folderPath(f.id))}</option>`).join('')}</select></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button onclick="chooseImportFiles()" class="primary">📄 Scegli PDF</button><button onclick="openFolderCreatorFromImport()">📁 Nuova cartella</button></div>`)}
+function chooseImportFiles(){pendingImportFolder=$("importTarget").value||db.folders[0].id;closeModal();choosePdf()}
+function openFolderCreatorFromImport(){const parent=$("importTarget").value||null;manageFolders();setTimeout(()=>{if($("folderParent"))$("folderParent").value=parent||""},0)}
+$("backupBtn").onclick=()=>{let blob=new Blob([JSON.stringify(store)],{type:"application/json"});downloadBlob(blob,"cantiere-pro-backup-completo.json")}
 $("restoreBtn").onclick=()=>$("restoreInput").click();
-$("restoreInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;try{db=JSON.parse(await f.text());save();render();toast("Backup ripristinato")}catch{toast("Backup non valido")}e.target.value=""}
+$("restoreInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let data=JSON.parse(await f.text());if(!Array.isArray(data.sites))throw new Error("Formato");store=data;store.sites=store.sites.map(normalizeSite);db=store.sites.find(x=>x.id===store.activeSiteId)||store.sites[0];save();render();toast("Backup completo ripristinato")}catch{toast("Backup non valido")}e.target.value=""}
 $("search").oninput=render;
 document.querySelectorAll("nav button[data-section]").forEach(b=>b.onclick=()=>{section=b.dataset.section;document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");render()});
 $("menuBtn").onclick=()=>{let a=document.querySelector("aside");a.style.display=a.style.display==="block"?"none":"block";a.style.position="fixed";a.style.zIndex="40";a.style.width="260px"};
 window.addEventListener("resize",()=>{if($("viewer").classList.contains("show")&&pdfDoc)renderPage()});
-if("serviceWorker"in navigator){ navigator.serviceWorker.register("sw.js?v=3.7",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{}); }
+if("serviceWorker"in navigator){ navigator.serviceWorker.register("sw.js?v=4.0",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{}); }
 setTool("zoom");
-window.choosePdf=choosePdf;window.openSites=openSites;window.switchSite=switchSite;window.deleteSite=deleteSite;window.createSite=createSite;window.manageFolders=manageFolders;window.createFolder=createFolder;window.deleteFolder=deleteFolder;window.openImportFolderChooser=openImportFolderChooser;window.chooseImportFiles=chooseImportFiles;window.openFileHub=openFileHub;window.openDrawing=openDrawing;window.exportDrawing=exportDrawing;window.deleteDrawing=deleteDrawing;window.deleteRevision=deleteRevision;window.newNote=newNote;window.saveNote=saveNote;window.deleteNote=deleteNote;window.newIssue=newIssue;window.saveIssue=saveIssue;window.deleteIssue=deleteIssue;window.savePhoto=savePhoto;window.downloadData=downloadData;
+window.closeModal=closeModal;window.openModal=openModal;window.closeViewer=closeViewer;window.choosePdf=choosePdf;window.importPdfFiles=importPdfFiles;window.openSites=openSites;window.switchSite=switchSite;window.deleteSite=deleteSite;window.createSite=createSite;window.renameSite=renameSite;window.saveSiteName=saveSiteName;window.manageFolders=manageFolders;window.createFolder=createFolder;window.deleteFolder=deleteFolder;window.openImportFolderChooser=openImportFolderChooser;window.chooseImportFiles=chooseImportFiles;window.openFileHub=openFileHub;window.openDrawing=openDrawing;window.exportDrawing=exportDrawing;window.deleteDrawing=deleteDrawing;window.moveDrawing=moveDrawing;window.saveMoveDrawing=saveMoveDrawing;window.deleteRevision=deleteRevision;window.newNote=newNote;window.saveNote=saveNote;window.deleteNote=deleteNote;window.newIssue=newIssue;window.saveIssue=saveIssue;window.deleteIssue=deleteIssue;window.savePhoto=savePhoto;window.downloadData=downloadData;
 render();
 </script>
 </body>
