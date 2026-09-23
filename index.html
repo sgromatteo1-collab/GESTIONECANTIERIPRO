@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07111f">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Cantiere Pro v3.3</title>
+<title>Cantiere Pro v3.7</title>
 <style>
 :root{--bg:#07111f;--panel:#0d1a2b;--panel2:#11233a;--line:#203650;--txt:#edf5ff;--muted:#8ea5bd;--accent:#3ba7ff;--danger:#ff5263;--ok:#4dd49a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -38,7 +38,7 @@ main{min-width:0}.top{min-height:72px;border-bottom:1px solid var(--line);displa
 <body>
 <div class="app">
 <aside>
-<div class="brand">🏗 Cantiere Pro<small>v3.5 · PDF + revisioni</small></div>
+<div class="brand">🏗 Cantiere Pro<small>v3.7 · PDF + revisioni</small></div>
 <nav>
 <button class="active" data-section="home">⌂ Dashboard</button>
 <button data-section="drawings">📐 Disegni</button>
@@ -57,8 +57,9 @@ main{min-width:0}.top{min-height:72px;border-bottom:1px solid var(--line);displa
 <header class="top">
 <button class="mobileMenu" id="menuBtn">☰</button>
 <input id="search" placeholder="Cerca disegni, note, problemi...">
-<button id="addPdf">＋ Disegno</button><button id="addNote">＋ Nota</button><button id="addPhoto">📷 Foto</button>
-<input id="pdfInput" type="file" accept="application/pdf" hidden>
+<button id="addPdf">＋ Disegno</button><button id="importFolder">🗂 Importa cartella</button><button id="addNote">＋ Nota</button><button id="addPhoto">📷 Foto</button>
+<input id="pdfInput" type="file" accept="application/pdf" multiple hidden>
+<input id="folderInput" type="file" accept="application/pdf" multiple webkitdirectory directory hidden>
 <input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
 <input id="restoreInput" type="file" accept="application/json" hidden>
 </header>
@@ -75,7 +76,8 @@ main{min-width:0}.top{min-height:72px;border-bottom:1px solid var(--line);displa
 </div>
 <div class="stage" id="stage"><div class="pageWrap" id="pageWrap"><canvas id="pdfCanvas"></canvas><canvas id="drawCanvas" class="drawCanvas"></canvas></div></div>
 <div class="tools">
-<button data-tool="pen" class="selected">✏️ Penna</button>
+<button data-tool="zoom" class="selected">🔍 Zoom</button>
+<button data-tool="pen">✏️ Penna</button>
 <button data-tool="highlighter">🖍 Evidenziatore</button>
 <button data-tool="arrow">➜ Freccia</button>
 <button data-tool="circle">○ Cerchio</button>
@@ -96,7 +98,7 @@ const {PDFDocument,rgb}=window.PDFLib;
 
 const KEY="cantiereProV32";
 let db=JSON.parse(localStorage.getItem(KEY)||"null")||{site:{name:"Cantiere principale"},drawings:[],notes:[],photos:[],issues:[],revisions:[]};
-let section="home", current=null, pdfDoc=null, pageNum=1, pageCount=1, scale=1, zoom=1, fitZoom=1, tool="pen";
+let section="home", current=null, pdfDoc=null, pageNum=1, pageCount=1, scale=1, zoom=1, fitZoom=1, tool="zoom";
 let undoStack=[],redoStack=[],activeStroke=null,last={x:0,y:0},start={x:0,y:0},textMode=false;
 
 const $=id=>document.getElementById(id);
@@ -125,14 +127,34 @@ else if(section==="issues")html+=`<div class="card"><div class="row space"><h2>�
 else if(section==="revisions")html+=`<div class="card"><h2>🔄 Revisioni</h2>${db.revisions.length?db.revisions.slice().reverse().map(r=>`<div class="file card" style="margin:8px 0"><div><strong>${esc(r.name)}</strong><span>${esc(r.base)} · ${esc(r.date)} · ${r.pages||1} pagine</span></div><div class="row"><span class="pill">${esc(r.rev)}</span>${r.data?`<button onclick="downloadData('${r.id}')">Esporta</button>`:""}<button onclick="deleteRevision('${r.id}')" class="danger">Elimina</button></div></div>`).join(""):`<div class="empty">Nessuna revisione.</div>`}</div>`;
 $("content").innerHTML=html;
 }
-function drawingList(q=""){let a=db.drawings.filter(x=>(x.name+" "+x.rev).toLowerCase().includes(q));return a.length?a.map(x=>`<div class="file card" style="margin:8px 0"><div><strong>${esc(x.name)}</strong><span>${esc(x.rev||"ORIGINALE")} · ${esc(x.size||"")}</span></div><div class="row"><button onclick="openDrawing('${x.id}')">Apri</button><button onclick="exportDrawing('${x.id}')">Esporta</button><button onclick="deleteDrawing('${x.id}')" class="danger">Elimina</button></div></div>`).join(""):`<div class="empty">Nessun PDF. Usa + Disegno e scegli File → iCloud Drive.</div>`}
+function drawingList(q=""){
+ let a=db.drawings.filter(x=>(x.name+" "+x.rev+" "+(x.folder||"")).toLowerCase().includes(q));
+ if(!a.length)return `<div class="empty">Nessun PDF. Usa + Disegno per scegliere uno o più PDF, oppure Importa cartella.</div>`;
+ const groups={};
+ a.forEach(x=>{const g=x.folder||"Disegni principali";(groups[g]??=[]).push(x)});
+ return Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0])).map(([folder,items])=>`<div class="card" style="margin:10px 0"><div class="row space"><h3 style="margin:0">📁 ${esc(folder)}</h3><span class="pill">${items.length} PDF</span></div>${items.map(x=>`<div class="file card" style="margin:8px 0;background:#0a1727"><div><strong>${esc(x.name)}</strong><span>${esc(x.rev||"ORIGINALE")} · ${esc(x.size||"")}</span></div><div class="row"><button onclick="openDrawing('${x.id}')">Apri</button><button onclick="exportDrawing('${x.id}')">Esporta</button><button onclick="deleteDrawing('${x.id}')" class="danger">Elimina</button></div></div>`).join("")}</div>`).join("");
+}
 function noteList(q=""){let a=db.notes.filter(x=>(x.title+" "+x.text).toLowerCase().includes(q));return a.length?a.slice().reverse().map(x=>`<div class="card" style="margin:8px 0"><div class="row space"><strong>${esc(x.title)}</strong><span class="pill">${esc(x.date)}</span></div><p class="note">${esc(x.text)}</p><button onclick="deleteNote('${x.id}')" class="danger">Elimina</button></div>`).join(""):`<div class="empty">Nessuna nota.</div>`}
 function photoList(q=""){let a=db.photos.filter(x=>(x.name+" "+x.note).toLowerCase().includes(q));return a.length?a.slice().reverse().map(x=>`<div class="card" style="margin:8px 0"><img src="${x.data}" style="max-width:100%;max-height:260px;border-radius:10px;display:block"><p>${esc(x.name)}</p><div class="muted small">${esc(x.date)} · ${esc(x.note||"")}</div></div>`).join(""):`<div class="empty">Nessuna foto.</div>`}
 function issueList(q=""){let a=db.issues.filter(x=>(x.title+" "+x.text+" "+x.status).toLowerCase().includes(q));return a.length?a.slice().reverse().map(x=>`<div class="card" style="margin:8px 0"><div class="row space"><strong>${esc(x.title)}</strong><span class="pill">${esc(x.status)}</span></div><p class="note">${esc(x.text)}</p><button onclick="deleteIssue('${x.id}')" class="danger">Elimina</button></div>`).join(""):`<div class="empty">Nessun problema.</div>`}
 
 function choosePdf(){$("pdfInput").click()}
 $("addPdf").onclick=choosePdf;
-$("pdfInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;let data=await fileToDataURL(f);db.drawings.push({id:uid(),name:f.name,rev:"ORIGINALE",size:Math.round(f.size/1024)+" KB",data});save();section="drawings";render();e.target.value=""}
+$("importFolder").onclick=()=>$("folderInput").click();
+async function importPdfFiles(files){
+  const list=Array.from(files||[]).filter(f=>/\.pdf$/i.test(f.name));
+  if(!list.length){toast("Nessun PDF selezionato");return}
+  for(const f of list){
+    const data=await fileToDataURL(f);
+    const rel=f.webkitRelativePath||"";
+    const parts=rel.split("/").filter(Boolean);
+    const folder=parts.length>1?parts.slice(0,-1).join(" / "):"";
+    db.drawings.push({id:uid(),name:f.name,rev:"ORIGINALE",size:Math.round(f.size/1024)+" KB",folder,data});
+  }
+  save();section="drawings";render();toast(`${list.length} disegn${list.length===1?"o":"i"} importat${list.length===1?"o":"i"}.`);
+}
+$("pdfInput").onchange=async e=>{await importPdfFiles(e.target.files);e.target.value=""}
+$("folderInput").onchange=async e=>{await importPdfFiles(e.target.files);e.target.value=""}
 function fileToDataURL(f){return new Promise((res,rej)=>{let r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
 
 async function openDrawing(id){
@@ -163,11 +185,25 @@ await page.render({canvasContext:pctx,viewport:vp}).promise;
 redraw();$("pageInfo").textContent=`${pageNum} / ${pageCount}`;$("zoomInfo").textContent=Math.round(zoom*100)+"%";
 }
 function point(e){let r=$("drawCanvas").getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+function setTool(next){
+  tool=next;
+  document.querySelectorAll("[data-tool]").forEach(x=>x.classList.toggle("selected",x.dataset.tool===tool));
+  const drawing=tool!=="zoom";
+  $("drawCanvas").style.pointerEvents=drawing?"auto":"none";
+  $("stage").style.touchAction=drawing?"none":"pan-x pan-y";
+}
+function finishToZoom(){if(tool!=="zoom")setTool("zoom")}
 function begin(e){
-if(tool==="text"){let p=point(e);let t=prompt("Testo da inserire:");if(t){pushAction({type:"text",x:p.x,y:p.y,text:t,size:Math.max(14,+$("size").value*3)});redraw()}return}
-$("drawCanvas").setPointerCapture(e.pointerId);let p=point(e);start=p;last=p;activeStroke={type:tool,points:[p],size:+$("size").value};}
+  if(tool==="zoom")return;
+  if(tool==="text"){
+    let p=point(e);let t=prompt("Testo da inserire:");
+    if(t){pushAction({type:"text",x:p.x,y:p.y,text:t,size:Math.max(14,+$("size").value*3)});redraw()}
+    finishToZoom();return;
+  }
+  $("drawCanvas").setPointerCapture(e.pointerId);let p=point(e);start=p;last=p;activeStroke={type:tool,points:[p],size:+$("size").value};
+}
 function move(e){if(!activeStroke)return;let p=point(e);if(tool==="pen"||tool==="highlighter"||tool==="eraser")activeStroke.points.push(p);last=p;redrawTemp()}
-function end(){if(!activeStroke)return;if((tool==="arrow"||tool==="circle")&&start.x===last.x&&start.y===last.y){activeStroke=null;redraw();return}pushAction(activeStroke);activeStroke=null;redraw()}
+function end(){if(!activeStroke)return;if((tool==="arrow"||tool==="circle")&&start.x===last.x&&start.y===last.y){activeStroke=null;redraw();finishToZoom();return}pushAction(activeStroke);activeStroke=null;redraw();finishToZoom()}
 function redrawTemp(){redraw();if(!activeStroke)return;drawAction($("drawCanvas").getContext("2d"),activeStroke)}
 function pushAction(a){undoStack.push({page:pageNum,action:a});redoStack=[]}
 function redraw(){let c=$("drawCanvas"),ctx=c.getContext("2d"),dpr=Math.min(3,window.devicePixelRatio||1);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,c.width/dpr,c.height/dpr);undoStack.filter(x=>x.page===pageNum).forEach(x=>drawAction(ctx,x.action));if(activeStroke)drawAction(ctx,activeStroke)}
@@ -179,11 +215,11 @@ else if(a.type==="eraser"){ctx.globalCompositeOperation="destination-out";ctx.li
 else if(a.type==="arrow"){ctx.strokeStyle="#ff3f67";ctx.lineWidth=a.size||4;ctx.beginPath();ctx.moveTo(a.x1,a.y1);ctx.lineTo(a.x2,a.y2);ctx.stroke();let ang=Math.atan2(a.y2-a.y1,a.x2-a.x1),len=12+a.size*2;ctx.beginPath();ctx.moveTo(a.x2,a.y2);ctx.lineTo(a.x2-len*Math.cos(ang-.5),a.y2-len*Math.sin(ang-.5));ctx.moveTo(a.x2,a.y2);ctx.lineTo(a.x2-len*Math.cos(ang+.5),a.y2-len*Math.sin(ang+.5));ctx.stroke()}
 else if(a.type==="circle"){ctx.strokeStyle="#ff3f67";ctx.beginPath();let cx=(a.x1+a.x2)/2,cy=(a.y1+a.y2)/2,rx=Math.abs(a.x2-a.x1)/2,ry=Math.abs(a.y2-a.y1)/2;ctx.ellipse(cx,cy,Math.max(2,rx),Math.max(2,ry),0,0,Math.PI*2);ctx.stroke()}
 else if(a.type==="text"){ctx.fillStyle="#d71945";ctx.font=`700 ${a.size||18}px -apple-system,BlinkMacSystemFont,sans-serif`;ctx.fillText(a.text,a.x,a.y)}
-ctx.restore()
-}
+ctx.restore()}
 function drawPath(ctx,pts){if(!pts||!pts.length)return;ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);ctx.stroke()}
-$("drawCanvas").addEventListener("pointerdown",begin);$("drawCanvas").addEventListener("pointermove",move);$("drawCanvas").addEventListener("pointerup",end);$("drawCanvas").addEventListener("pointercancel",()=>{activeStroke=null;redraw()});
-document.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>{tool=b.dataset.tool;document.querySelectorAll("[data-tool]").forEach(x=>x.classList.remove("selected"));b.classList.add("selected")});
+$("drawCanvas").addEventListener("pointerdown",begin);$("drawCanvas").addEventListener("pointermove",move);$("drawCanvas").addEventListener("pointerup",end);$("drawCanvas").addEventListener("pointercancel",()=>{activeStroke=null;redraw();finishToZoom()});
+document.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+
 $("undo").onclick=()=>{let i=undoStack.map(x=>x.page).lastIndexOf(pageNum);if(i>=0){redoStack.push(undoStack.splice(i,1)[0]);redraw()}}
 $("redo").onclick=()=>{let i=redoStack.map(x=>x.page).lastIndexOf(pageNum);if(i>=0){undoStack.push(redoStack.splice(i,1)[0]);redraw()}}
 $("clearInk").onclick=()=>{undoStack=undoStack.filter(x=>x.page!==pageNum);redoStack=[];redraw()}
@@ -229,11 +265,20 @@ $("zoomIn").onclick=()=>setZoom(zoom+0.25);
 $("zoomOut").onclick=()=>setZoom(zoom-0.25);
 $("zoom100").onclick=()=>setZoom(1);
 $("zoomFit").onclick=()=>{zoom=fitZoom;renderPage(false)};
-let pinchStart=0,pinchZoom=1;
-$("stage").addEventListener("touchstart",e=>{if(e.touches.length===2){e.preventDefault();let dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;pinchStart=Math.hypot(dx,dy);pinchZoom=zoom}}, {passive:false});
-$("stage").addEventListener("touchmove",e=>{if(e.touches.length===2&&pinchStart){e.preventDefault();let dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;let dist=Math.hypot(dx,dy);setZoom(pinchZoom*(dist/pinchStart))}}, {passive:false});
-$("stage").addEventListener("touchend",e=>{if(e.touches.length<2)pinchStart=0});
-$("stage").addEventListener("wheel",e=>{if(e.ctrlKey){e.preventDefault();setZoom(zoom*(e.deltaY<0?1.1:.9))}}, {passive:false});
+let pinchStart=0,pinchZoom=1,pinchLast=0;
+$("stage").addEventListener("touchstart",e=>{
+  if(tool!=="zoom")return;
+  if(e.touches.length===2){e.preventDefault();let dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;pinchStart=Math.hypot(dx,dy);pinchZoom=zoom;}
+},{passive:false});
+$("stage").addEventListener("touchmove",e=>{
+  if(tool!=="zoom"||e.touches.length!==2||!pinchStart)return;
+  e.preventDefault();let dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;let dist=Math.hypot(dx,dy);let z=Math.max(.5,Math.min(4,pinchZoom*(dist/pinchStart)));
+  zoom=z;$("zoomInfo").textContent=Math.round(zoom*100)+"%";
+  const now=performance.now();if(now-pinchLast>90){pinchLast=now;renderPage(false)}
+},{passive:false});
+$("stage").addEventListener("touchend",e=>{if(e.touches.length<2)pinchStart=0},{passive:false});
+$("stage").addEventListener("wheel",e=>{if(tool==="zoom"&&(e.ctrlKey||e.metaKey)){e.preventDefault();setZoom(zoom*(e.deltaY<0?1.1:.9))}}, {passive:false});
+
 $("revisionBtn").onclick=createRevision;
 function blobToDataURL(blob){return new Promise((res,rej)=>{let r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob)})}
 function downloadBlob(blob,name){let a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
@@ -255,7 +300,7 @@ function deleteRevision(id){
  toast(before!==db.revisions.length ? `${r.rev} eliminata.` : 'Revisione non trovata.');
 }
 
-function openFileHub(){openModal(`<h2>☁️ File / iCloud Drive</h2><p class="muted">Su iPad/iPhone la PWA utilizza il selettore ufficiale di iOS/iPadOS.</p><div class="card"><h3>📥 Apri PDF</h3><p class="small muted">File → iCloud Drive → scegli il PDF.</p><button class="primary" onclick="closeModal();choosePdf()">Scegli PDF</button></div><div class="card" style="margin-top:10px"><h3>📤 Salva revisione</h3><p class="small muted">Dopo aver creato una revisione, il PDF viene scaricato/aperto nel normale flusso di iOS. Scegli “Salva su File” → iCloud Drive.</p></div><div class="card" style="margin-top:10px"><h3>🗂 Struttura consigliata</h3><p class="small muted">CANTIERE PRO / NOME CANTIERE / DISEGNI ORIGINALI · REVISIONI · FOTO · NOTE</p></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button></div>`)}
+function openFileHub(){openModal(`<h2>☁️ File / iCloud Drive</h2><p class="muted">Su iPad/iPhone la PWA utilizza il selettore ufficiale di iOS/iPadOS.</p><div class="card"><h3>📥 Apri PDF</h3><p class="small muted">File → iCloud Drive → scegli il PDF.</p><button class="primary" onclick="closeModal();choosePdf()">Scegli uno o più PDF</button></div><div class="card" style="margin-top:10px"><h3>🗂 Importazione multipla</h3><p class="small muted">Su browser compatibili puoi usare “Importa cartella” per catalogare automaticamente i PDF della cartella. Su iPad/iPhone, se il selettore File non consente la cartella, seleziona più PDF contemporaneamente: l’app li catalogherà nello stesso elenco.</p></div><div class="card" style="margin-top:10px"><h3>📤 Salva revisione</h3><p class="small muted">Dopo aver creato una revisione, il PDF viene scaricato/aperto nel normale flusso di iOS. Scegli “Salva su File” → iCloud Drive.</p></div><div class="card" style="margin-top:10px"><h3>🗂 Struttura consigliata</h3><p class="small muted">CANTIERE PRO / NOME CANTIERE / DISEGNI ORIGINALI · REVISIONI · FOTO · NOTE</p></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button></div>`)}
 $("fileHub").onclick=openFileHub;
 
 function newNote(){openModal(`<h2>📝 Nuova nota</h2><div class="field"><label>Titolo</label><input id="nt"></div><div class="field"><label>Nota</label><textarea id="nx"></textarea></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button class="primary" onclick="saveNote()">Salva</button></div>`)}
@@ -277,7 +322,8 @@ $("search").oninput=render;
 document.querySelectorAll("nav button[data-section]").forEach(b=>b.onclick=()=>{section=b.dataset.section;document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");render()});
 $("menuBtn").onclick=()=>{let a=document.querySelector("aside");a.style.display=a.style.display==="block"?"none":"block";a.style.position="fixed";a.style.zIndex="40";a.style.width="260px"};
 window.addEventListener("resize",()=>{if($("viewer").classList.contains("show")&&pdfDoc)renderPage()});
-if("serviceWorker"in navigator){ navigator.serviceWorker.register("sw.js?v=3.5",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{}); }
+if("serviceWorker"in navigator){ navigator.serviceWorker.register("sw.js?v=3.7",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{}); }
+setTool("zoom");
 window.choosePdf=choosePdf;window.openFileHub=openFileHub;window.openDrawing=openDrawing;window.exportDrawing=exportDrawing;window.deleteDrawing=deleteDrawing;window.deleteRevision=deleteRevision;window.newNote=newNote;window.saveNote=saveNote;window.deleteNote=deleteNote;window.newIssue=newIssue;window.saveIssue=saveIssue;window.deleteIssue=deleteIssue;window.savePhoto=savePhoto;window.downloadData=downloadData;
 render();
 </script>

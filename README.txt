@@ -1,47 +1,17 @@
-CANTIERE PRO v3.2
-================================
+CANTIERE PRO v3.7
+
 Novità:
-- visualizzazione PDF multipagina con PDF.js
-- Apple Pencil / touch per annotazioni
-- penna
-- evidenziatore
-- frecce
-- cerchi
-- testo
-- gomma
-- annulla/ripristina
-- salvataggio di una vera nuova revisione PDF tramite pdf-lib
-- numerazione automatica REV01, REV02, REV03...
-- originale non sovrascritto
-- esportazione della revisione come PDF
-- File/iCloud Drive tramite il selettore ufficiale di iPadOS/iOS
-- note, foto, problemi, backup
+- Visualizzatore PDF con zoom 50%-400% e rendering ad alta densità.
+- Comando base del visualizzatore: ZOOM.
+- Dopo ogni penna/evidenziatore/freccia/cerchio/testo/gomma, il comando torna automaticamente a ZOOM.
+- Su iPad: zoom con due dita e scorrimento del disegno in modalità ZOOM.
+- Importazione multipla di PDF.
+- Importa cartella: sui browser che supportano la selezione directory, importa tutti i PDF e conserva il percorso della cartella per la catalogazione.
+- Su iPad/iPhone, se File non permette di selezionare una cartella, usare la selezione multipla di PDF: l'app li cataloga comunque e mostra la cartella quando il sistema la rende disponibile.
+- Cache Service Worker aggiornata a v3.7.
 
-INSTALLAZIONE:
-1. Carica tutti i file nel repository GitHub Pages.
-2. Settings > Pages > Deploy from branch > main > root.
-3. Apri l'URL con Safari su iPad/iPhone.
-4. Condividi > Aggiungi alla schermata Home > Apri come app web.
-
-USO PDF:
-+ Disegno -> File -> iCloud Drive -> scegli PDF.
-Apri il disegno -> annota con Apple Pencil -> Salva REVISIONE.
-La nuova revisione viene generata come vero PDF e scaricata/esportata con nome:
-NOME_ORIGINALE_REV01.pdf
-poi REV02, REV03...
-
-NOTA ICLOUD:
-Una PWA non può scrivere silenziosamente e in modo permanente dentro una cartella iCloud Drive specifica.
-Perciò iPadOS usa il proprio flusso “Salva su File”, che permette di scegliere iCloud Drive.
-
-
-v3.5: fix eliminazione revisioni (funzione esposta alla UI) e aggiornamento Service Worker/cache.
-
-
-V3.6 - VISUALIZZAZIONE PDF
-- Zoom 50%-400%
-- pulsanti + / - / 100% / Adatta
-- pinch-to-zoom con due dita su iPad
-- rendering PDF ad alta densita fino a 3x devicePixelRatio per ridurre la sgranatura
-- rendering vettoriale PDF tramite PDF.js: il PDF non viene convertito in una semplice immagine
-- barra di zoom e pagina sempre visibili
+Installazione GitHub Pages:
+1. Estrai lo ZIP.
+2. Carica tutti i file nella root del repository.
+3. Settings > Pages > Deploy from branch > main > /(root).
+4. Apri il sito in Safari su iPad/iPhone e aggiungilo alla schermata Home.
