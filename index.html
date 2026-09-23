@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07111f">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Cantiere Pro v3.8</title>
+<title>Cantiere Pro v3.7</title>
 <style>
 :root{--bg:#07111f;--panel:#0d1a2b;--panel2:#11233a;--line:#203650;--txt:#edf5ff;--muted:#8ea5bd;--accent:#3ba7ff;--danger:#ff5263;--ok:#4dd49a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -38,7 +38,7 @@ main{min-width:0}.top{min-height:72px;border-bottom:1px solid var(--line);displa
 <body>
 <div class="app">
 <aside>
-<div class="brand">🏗 Cantiere Pro<small>v3.8 · PDF + revisioni</small></div>
+<div class="brand">🏗 Cantiere Pro<small>v3.7 · PDF + revisioni</small></div>
 <nav>
 <button class="active" data-section="home">⌂ Dashboard</button>
 <button data-section="drawings">📐 Disegni</button>
@@ -57,7 +57,7 @@ main{min-width:0}.top{min-height:72px;border-bottom:1px solid var(--line);displa
 <header class="top">
 <button class="mobileMenu" id="menuBtn">☰</button>
 <input id="search" placeholder="Cerca disegni, note, problemi...">
-<button id="addPdf">＋ Disegno</button><button id="importFolder">🗂 Importa cartella</button><button id="addNote">＋ Nota</button><button id="addPhoto">📷 Foto</button>
+<button id="addPdf">＋ Disegno</button><button id="importFolder">📥 Importa disegni</button><button id="manageFolders">📁 Cartelle</button><button id="addNote">＋ Nota</button><button id="addPhoto">📷 Foto</button>
 <input id="pdfInput" type="file" accept="application/pdf" multiple hidden>
 <input id="folderInput" type="file" accept="application/pdf" multiple webkitdirectory directory hidden>
 <input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
@@ -96,13 +96,31 @@ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@
 window.pdfjsLib=pdfjsLib;
 const {PDFDocument,rgb}=window.PDFLib;
 
-const KEY="cantiereProV32";
-let db=JSON.parse(localStorage.getItem(KEY)||"null")||{site:{name:"Cantiere principale"},drawings:[],notes:[],photos:[],issues:[],revisions:[]};
-let section="home", current=null, pdfDoc=null, pageNum=1, pageCount=1, scale=1, zoom=1, fitZoom=1, tool="zoom";
+const KEY="cantiereProV38";
+let stored=JSON.parse(localStorage.getItem(KEY)||"null");
+let store=stored&&Array.isArray(stored.sites)?stored:null;
+let db=null;
+function makeSite(name="Cantiere principale"){return {id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),name,folders:["Disegni principali"],drawings:[],notes:[],photos:[],issues:[],revisions:[]}}
+if(!store){
+  const legacy=JSON.parse(localStorage.getItem("cantiereProV32")||"null");
+  const site=makeSite(legacy?.site?.name||"Cantiere principale");
+  if(legacy){site.drawings=legacy.drawings||[];site.notes=legacy.notes||[];site.photos=legacy.photos||[];site.issues=legacy.issues||[];site.revisions=legacy.revisions||[];}
+  store={sites:[site],activeSiteId:site.id};
+}
+if(!store.sites.length){const site=makeSite();store.sites.push(site);store.activeSiteId=site.id;}
+const activeSiteId=store.activeSiteId||store.sites[0].id;
+db=store.sites.find(x=>x.id===activeSiteId)||store.sites[0];
+if(!Array.isArray(db.folders)||!db.folders.length)db.folders=["Disegni principali"];
+let section="home", current=null, pdfDoc=null, pageNum=1, pageCount=1, scale=1, zoom=1, fitZoom=1, tool="zoom", pendingImportFolder="Disegni principali";
 let undoStack=[],redoStack=[],activeStroke=null,last={x:0,y:0},start={x:0,y:0},textMode=false;
 
 const $=id=>document.getElementById(id);
-function save(){localStorage.setItem(KEY,JSON.stringify(db))}
+function save(){
+  const i=store.sites.findIndex(x=>x.id===db.id);
+  if(i>=0)store.sites[i]=db; else store.sites.push(db);
+  store.activeSiteId=db.id;
+  localStorage.setItem(KEY,JSON.stringify(store));
+}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 function toast(t){$("toast").textContent=t;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2600)}
@@ -112,7 +130,7 @@ $("modal").onclick=e=>{if(e.target.id==="modal")closeModal()}
 
 function render(){
 let q=$("search").value.toLowerCase();
-let html=`<div class="hero"><div><h1>${esc(db.site.name)}</h1><div class="muted">PDF, Apple Pencil, revisioni, foto e note</div></div><button class="primary" onclick="choosePdf()">＋ Aggiungi disegno</button></div>`;
+let html=`<div class="hero"><div><h1>${esc(db.name)}</h1><div class="muted">Cantiere attivo · ${db.drawings.length} disegni · ${db.folders.length} cartelle</div></div><div class="row"><button onclick="openSites()">🏗 Cantieri</button><button class="primary" onclick="openImportFolderChooser()">📥 Importa disegni</button></div></div>`;
 if(section==="home")html+=`<div class="grid">
 <div class="card"><div class="muted">Disegni</div><div class="stat">${db.drawings.length}</div></div>
 <div class="card"><div class="muted">Revisioni</div><div class="stat">${db.revisions.length}</div></div>
@@ -120,7 +138,7 @@ if(section==="home")html+=`<div class="grid">
 <div class="card"><div class="muted">Problemi</div><div class="stat">${db.issues.length}</div></div></div><br>
 <div class="card"><h3>☁️ File / iCloud Drive</h3><p class="muted">Apri i PDF tramite File → iCloud Drive e salva le revisioni tramite il pannello di condivisione di iPadOS.</p><button class="primary" onclick="openFileHub()">Gestisci File / iCloud</button></div><br>
 <div class="card"><h3>Ultimi disegni</h3>${drawingList(q)}</div>`;
-else if(section==="drawings")html+=`<div class="card"><h2>📐 Disegni</h2>${drawingList(q)}</div>`;
+else if(section==="drawings")html+=`<div class="card"><div class="row space"><h2>📐 Disegni</h2><div class="row"><button onclick="manageFolders()">📁 Gestisci cartelle</button><button class="primary" onclick="openImportFolderChooser()">📥 Importa disegni</button></div></div>${drawingList(q)}</div>`;
 else if(section==="notes")html+=`<div class="card"><div class="row space"><h2>📝 Note</h2><button class="primary" onclick="newNote()">＋ Nuova nota</button></div>${noteList(q)}</div>`;
 else if(section==="photos")html+=`<div class="card"><div class="row space"><h2>📷 Foto</h2><button class="primary" onclick="$('photoInput').click()">＋ Scatta / scegli</button></div>${photoList(q)}</div>`;
 else if(section==="issues")html+=`<div class="card"><div class="row space"><h2>🔴 Problemi</h2><button class="primary" onclick="newIssue()">＋ Nuovo problema</button></div>${issueList(q)}</div>`;
@@ -140,52 +158,18 @@ function issueList(q=""){let a=db.issues.filter(x=>(x.title+" "+x.text+" "+x.sta
 
 function choosePdf(){$("pdfInput").click()}
 $("addPdf").onclick=choosePdf;
-
-async function importFolder(){
-  // Su browser desktop che supportano File System Access API, apriamo una vera cartella.
-  // Su iPad/iPhone Safari la PWA non può leggere una cartella iCloud Drive intera:
-  // usiamo quindi il selettore multiplo di File come fallback.
-  if(window.showDirectoryPicker){
-    try{
-      const handle=await window.showDirectoryPicker({mode:"read"});
-      const files=[];
-      async function walk(dirHandle,path=""){
-        for await(const entry of dirHandle.values()){
-          if(entry.kind==="file" && /\.pdf$/i.test(entry.name)){
-            const f=await entry.getFile();
-            f._cantiereFolder=path;
-            files.push(f);
-          }else if(entry.kind==="directory"){
-            await walk(entry,path?path+" / "+entry.name:entry.name);
-          }
-        }
-      }
-      await walk(handle,"");
-      await importPdfFiles(files);
-      return;
-    }catch(e){
-      if(e && e.name==="AbortError") return;
-    }
-  }
-  $("folderInput").click();
-}
-
-$("importFolder").onclick=importFolder;
-
-async function importPdfFiles(files){
+$("importFolder").onclick=()=>$("folderInput").click();
+async function importPdfFiles(files, folder){
   const list=Array.from(files||[]).filter(f=>/\.pdf$/i.test(f.name));
   if(!list.length){toast("Nessun PDF selezionato");return}
+  const target=folder||pendingImportFolder||"Disegni principali";
+  if(!db.folders.includes(target))db.folders.push(target);
   for(const f of list){
     const data=await fileToDataURL(f);
-    const rel=f.webkitRelativePath||"";
-    const parts=rel.split("/").filter(Boolean);
-    const folder=f._cantiereFolder || (parts.length>1?parts.slice(0,-1).join(" / "):"");
-    db.drawings.push({id:uid(),name:f.name,rev:"ORIGINALE",size:Math.round(f.size/1024)+" KB",folder,data});
+    db.drawings.push({id:uid(),name:f.name,rev:"ORIGINALE",size:Math.round(f.size/1024)+" KB",folder:target,data});
   }
-  save();section="drawings";render();toast(`${list.length} disegn${list.length===1?"o":"i"} importat${list.length===1?"o":"i"}.`);
+  save();section="drawings";render();toast(`${list.length} disegn${list.length===1?"o":"i"} importat${list.length===1?"o":"i"} in ${target}.`);
 }
-$("pdfInput").onchange=async e=>{await importPdfFiles(e.target.files);e.target.value=""}
-$("folderInput").onchange=async e=>{await importPdfFiles(e.target.files);e.target.value=""}
 function fileToDataURL(f){return new Promise((res,rej)=>{let r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
 
 async function openDrawing(id){
@@ -331,7 +315,7 @@ function deleteRevision(id){
  toast(before!==db.revisions.length ? `${r.rev} eliminata.` : 'Revisione non trovata.');
 }
 
-function openFileHub(){openModal(`<h2>☁️ File / iCloud Drive</h2><p class="muted">Su iPad/iPhone la PWA utilizza il selettore ufficiale di iOS/iPadOS.</p><div class="card"><h3>📥 Apri PDF</h3><p class="small muted">File → iCloud Drive → scegli il PDF.</p><button class="primary" onclick="closeModal();choosePdf()">Scegli uno o più PDF</button></div><div class="card" style="margin-top:10px"><h3>🗂 Importazione multipla</h3><p class="small muted">Su computer e browser compatibili “Importa cartella” legge anche le sottocartelle. Su iPad/iPhone, iOS non concede a una PWA l'accesso diretto a un'intera cartella iCloud Drive: seleziona più PDF insieme dalla cartella File. I PDF verranno comunque catalogati e raggruppati nell'app.</p></div><div class="card" style="margin-top:10px"><h3>📤 Salva revisione</h3><p class="small muted">Dopo aver creato una revisione, il PDF viene scaricato/aperto nel normale flusso di iOS. Scegli “Salva su File” → iCloud Drive.</p></div><div class="card" style="margin-top:10px"><h3>🗂 Struttura consigliata</h3><p class="small muted">CANTIERE PRO / NOME CANTIERE / DISEGNI ORIGINALI · REVISIONI · FOTO · NOTE</p></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button></div>`)}
+function openFileHub(){openModal(`<h2>☁️ File / iCloud Drive</h2><p class="muted">Su iPad/iPhone la PWA utilizza il selettore ufficiale di iOS/iPadOS.</p><div class="card"><h3>📥 Apri PDF</h3><p class="small muted">File → iCloud Drive → scegli il PDF.</p><button class="primary" onclick="closeModal();choosePdf()">Scegli uno o più PDF</button></div><div class="card" style="margin-top:10px"><h3>🗂 Importazione multipla</h3><p class="small muted">Su iPad/iPhone crea prima le cartelle in Cantiere Pro, poi seleziona più PDF dalla cartella di iCloud Drive/Files. I PDF verranno catalogati automaticamente nella cartella del cantiere scelta.</p></div><div class="card" style="margin-top:10px"><h3>📤 Salva revisione</h3><p class="small muted">Dopo aver creato una revisione, il PDF viene scaricato/aperto nel normale flusso di iOS. Scegli “Salva su File” → iCloud Drive.</p></div><div class="card" style="margin-top:10px"><h3>🗂 Struttura consigliata</h3><p class="small muted">CANTIERE PRO / NOME CANTIERE / DISEGNI ORIGINALI · REVISIONI · FOTO · NOTE</p></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button></div>`)}
 $("fileHub").onclick=openFileHub;
 
 function newNote(){openModal(`<h2>📝 Nuova nota</h2><div class="field"><label>Titolo</label><input id="nt"></div><div class="field"><label>Nota</label><textarea id="nx"></textarea></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button class="primary" onclick="saveNote()">Salva</button></div>`)}
@@ -345,24 +329,19 @@ $("addPhoto").onclick=()=>$("photoInput").click();
 $("photoInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;let data=await fileToDataURL(f);openModal(`<h2>📷 Salva foto</h2><img src="${data}" style="max-width:100%;max-height:280px;border-radius:10px"><div class="field"><label>Descrizione</label><input id="pn" value="${esc(f.name)}"></div><div class="field"><label>Nota</label><textarea id="px"></textarea></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button class="primary" onclick='savePhoto(${JSON.stringify(data)})'>Salva</button></div>`);e.target.value=""}
 function savePhoto(data){db.photos.push({id:uid(),name:$("pn").value||"Foto",note:$("px").value,date:new Date().toLocaleString("it-IT"),data});save();closeModal();render()}
 function deleteDrawing(id){if(!confirm("Eliminare questo disegno dall'app?"))return;db.drawings=db.drawings.filter(x=>x.id!==id);save();render()}
-function newSite(){
-  openModal(`<h2>⚙️ Cantiere</h2>
-  <div class="field"><label>Nome cantiere</label><input id="sn" value="${esc(db.site.name||"Cantiere principale")}"></div>
-  <div class="row" style="justify-content:flex-end">
-    <button id="cancelSite">Annulla</button>
-    <button id="saveSite" class="primary">Salva</button>
-  </div>`);
-  $("cancelSite").onclick=closeModal;
-  $("saveSite").onclick=()=>{
-    const name=$("sn").value.trim();
-    db.site.name=name||"Cantiere principale";
-    save();
-    closeModal();
-    render();
-    toast("Nome cantiere salvato");
-  };
-}
-$("siteBtn").onclick=newSite;
+$("siteBtn").onclick=openSites;
+function openSites(){openModal(`<h2>🏗 Gestione cantieri</h2><p class="muted">Crea e seleziona più cantieri. Ogni cantiere mantiene separati disegni, cartelle, note, foto, problemi e revisioni.</p><div class="card" style="margin:10px 0">${store.sites.map(x=>`<div class="file" style="padding:10px 0;border-bottom:1px solid var(--line)"><div><strong>${esc(x.name)}</strong><span>${x.drawings.length} disegni · ${x.folders.length} cartelle</span></div><div class="row">${x.id===db.id?'<span class="pill">ATTIVO</span>':`<button onclick="switchSite('${x.id}')">Apri</button>`}${store.sites.length>1?`<button class="danger" onclick="deleteSite('${x.id}')">Elimina</button>`:''}</div></div>`).join('')}</div><h3>＋ Nuovo cantiere</h3><div class="field"><label>Nome cantiere</label><input id="newSiteName" placeholder="Es. Cantiere Via Roma"></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button><button class="primary" onclick="createSite()">Crea cantiere</button></div>`)}
+function createSite(){const name=$("newSiteName").value.trim()||"Nuovo cantiere";const site=makeSite(name);store.sites.push(site);db=site;save();closeModal();render();toast(`Cantiere "${name}" creato.`)}
+function switchSite(id){const site=store.sites.find(x=>x.id===id);if(!site)return;db=site;store.activeSiteId=id;save();closeModal();section="home";render();toast(`Cantiere attivo: ${site.name}`)}
+function deleteSite(id){if(store.sites.length<=1){toast("Devi mantenere almeno un cantiere");return}const site=store.sites.find(x=>x.id===id);if(!site)return;if(!confirm(`Eliminare il cantiere "${site.name}" e tutti i suoi dati?`))return;store.sites=store.sites.filter(x=>x.id!==id);db=store.sites[0];store.activeSiteId=db.id;save();closeModal();render();toast("Cantiere eliminato.")}
+function manageFolders(){openModal(`<h2>📁 Cartelle disegni</h2><p class="muted">Crea le cartelle del cantiere. Quando importi più PDF, scegli in quale cartella inserirli.</p><div class="card">${db.folders.map((f,i)=>`<div class="file" style="padding:9px 0;border-bottom:1px solid var(--line)"><div><strong>📁 ${esc(f)}</strong><span>${db.drawings.filter(d=>(d.folder||"Disegni principali")===f).length} disegni</span></div>${f!=="Disegni principali"?`<button class="danger" onclick="deleteFolder('${encodeURIComponent(f)}')">Elimina</button>`:''}</div>`).join('')}</div><div class="field"><label>Nuova cartella</label><input id="folderName" placeholder="Es. Piante, Prospetti, Strutturali..."></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button><button class="primary" onclick="createFolder()">＋ Crea cartella</button></div>`)}
+function createFolder(){const n=$("folderName").value.trim();if(!n){toast("Inserisci il nome della cartella");return}if(db.folders.includes(n)){toast("Cartella già esistente");return}db.folders.push(n);save();manageFolders();render();toast("Cartella creata.")}
+function deleteFolder(enc){const f=decodeURIComponent(enc);if(f==="Disegni principali")return;if(db.drawings.some(d=>(d.folder||"Disegni principali")===f)){toast("La cartella contiene disegni: spostali prima di eliminarla.");return}db.folders=db.folders.filter(x=>x!==f);save();manageFolders();render()}
+function openImportFolderChooser(){openModal(`<h2>📥 Importa disegni</h2><p class="muted">Su iPad seleziona più PDF dalla stessa cartella di iCloud Drive/Files e Cantiere Pro li inserirà nella cartella che scegli qui.</p><div class="field"><label>Cartella di destinazione</label><select id="importTarget">${db.folders.map(f=>`<option value="${esc(f)}">📁 ${esc(f)}</option>`).join('')}</select></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button onclick="chooseImportFiles()" class="primary">📄 Scegli PDF</button><button onclick="closeModal();manageFolders()">📁 Nuova cartella</button></div>`)}
+function chooseImportFiles(){pendingImportFolder=$("importTarget").value||"Disegni principali";closeModal();choosePdf()}
+$("importFolder").onclick=openImportFolderChooser;
+$("manageFolders").onclick=manageFolders;
+
 $("backupBtn").onclick=()=>{let blob=new Blob([JSON.stringify(db)],{type:"application/json"});downloadBlob(blob,"cantiere-pro-backup.json")}
 $("restoreBtn").onclick=()=>$("restoreInput").click();
 $("restoreInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;try{db=JSON.parse(await f.text());save();render();toast("Backup ripristinato")}catch{toast("Backup non valido")}e.target.value=""}
@@ -370,9 +349,9 @@ $("search").oninput=render;
 document.querySelectorAll("nav button[data-section]").forEach(b=>b.onclick=()=>{section=b.dataset.section;document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");render()});
 $("menuBtn").onclick=()=>{let a=document.querySelector("aside");a.style.display=a.style.display==="block"?"none":"block";a.style.position="fixed";a.style.zIndex="40";a.style.width="260px"};
 window.addEventListener("resize",()=>{if($("viewer").classList.contains("show")&&pdfDoc)renderPage()});
-if("serviceWorker"in navigator){ navigator.serviceWorker.register("sw.js?v=3.8",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{}); }
+if("serviceWorker"in navigator){ navigator.serviceWorker.register("sw.js?v=3.7",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{}); }
 setTool("zoom");
-window.choosePdf=choosePdf;window.importFolder=importFolder;window.newSite=newSite;window.openFileHub=openFileHub;window.openDrawing=openDrawing;window.exportDrawing=exportDrawing;window.deleteDrawing=deleteDrawing;window.deleteRevision=deleteRevision;window.newNote=newNote;window.saveNote=saveNote;window.deleteNote=deleteNote;window.newIssue=newIssue;window.saveIssue=saveIssue;window.deleteIssue=deleteIssue;window.savePhoto=savePhoto;window.downloadData=downloadData;
+window.choosePdf=choosePdf;window.openSites=openSites;window.switchSite=switchSite;window.deleteSite=deleteSite;window.createSite=createSite;window.manageFolders=manageFolders;window.createFolder=createFolder;window.deleteFolder=deleteFolder;window.openImportFolderChooser=openImportFolderChooser;window.chooseImportFiles=chooseImportFiles;window.openFileHub=openFileHub;window.openDrawing=openDrawing;window.exportDrawing=exportDrawing;window.deleteDrawing=deleteDrawing;window.deleteRevision=deleteRevision;window.newNote=newNote;window.saveNote=saveNote;window.deleteNote=deleteNote;window.newIssue=newIssue;window.saveIssue=saveIssue;window.deleteIssue=deleteIssue;window.savePhoto=savePhoto;window.downloadData=downloadData;
 render();
 </script>
 </body>

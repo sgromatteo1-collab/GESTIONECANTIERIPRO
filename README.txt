@@ -1,12 +1,11 @@
-CANTIERE PRO v3.8
+CANTIERE PRO v3.9
 
-Correzioni:
-- salvataggio del nome cantiere corretto anche in PWA/module scope
-- importazione cartella su browser compatibili con File System Access API
-- fallback su selezione multipla PDF per iPad/iPhone
-- catalogazione per cartella/sottocartella quando il browser fornisce il percorso
-- cache Service Worker v3.8 con aggiornamento forzato dell'index.html
-
-Nota iPad/iPhone:
-iOS/iPadOS non consente a una PWA di leggere direttamente un'intera cartella iCloud Drive in modo persistente.
-Dal selettore File è possibile selezionare più PDF contemporaneamente; l'app li cataloga nello stesso elenco.
+Novità:
+- Gestione di più cantieri separati.
+- Creazione, selezione e cancellazione dei cantieri.
+- Ogni cantiere mantiene separati disegni, cartelle, note, foto, problemi e revisioni.
+- Creazione di cartelle interne per catalogare i disegni.
+- Importazione di più PDF nella cartella scelta.
+- Su iPad/iPhone: seleziona più PDF dalla stessa cartella di iCloud Drive/Files e assegnali alla cartella Cantiere Pro scelta.
+- Migrazione automatica dei dati delle versioni precedenti.
+- Cache aggiornata alla v3.9.
