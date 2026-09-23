@@ -36,3 +36,12 @@ Perciò iPadOS usa il proprio flusso “Salva su File”, che permette di scegli
 
 
 v3.5: fix eliminazione revisioni (funzione esposta alla UI) e aggiornamento Service Worker/cache.
+
+
+V3.6 - VISUALIZZAZIONE PDF
+- Zoom 50%-400%
+- pulsanti + / - / 100% / Adatta
+- pinch-to-zoom con due dita su iPad
+- rendering PDF ad alta densita fino a 3x devicePixelRatio per ridurre la sgranatura
+- rendering vettoriale PDF tramite PDF.js: il PDF non viene convertito in una semplice immagine
+- barra di zoom e pagina sempre visibili
