@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07111f">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Cantiere Pro v3.3</title>
+<style>
+:root{--bg:#07111f;--panel:#0d1a2b;--panel2:#11233a;--line:#203650;--txt:#edf5ff;--muted:#8ea5bd;--accent:#3ba7ff;--danger:#ff5263;--ok:#4dd49a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input,textarea,select{font:inherit}button{border:0;color:var(--txt);background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 13px;cursor:pointer}
+button.primary{background:var(--accent);color:#03101d;border-color:var(--accent);font-weight:700}button.danger{background:#321721;border-color:#63303a}
+.app{min-height:100vh;display:grid;grid-template-columns:250px 1fr}aside{border-right:1px solid var(--line);padding:18px;background:#081525;position:sticky;top:0;height:100vh}
+.brand{font-size:22px;font-weight:800;margin-bottom:24px}.brand small{display:block;color:var(--muted);font-size:12px;font-weight:500;margin-top:3px}
+nav button{display:block;width:100%;text-align:left;margin:7px 0;background:transparent}.active{background:var(--panel2)!important}
+main{min-width:0}.top{min-height:72px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:12px 18px;position:sticky;top:0;background:rgba(7,17,31,.94);backdrop-filter:blur(10px);z-index:5}
+.top input{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:12px 14px;min-width:80px}
+.content{padding:22px;max-width:1500px;margin:auto}.hero{display:flex;justify-content:space-between;gap:18px;align-items:end;margin-bottom:18px}.hero h1{margin:0 0 6px;font-size:30px}.muted{color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}.card h2,.card h3{margin-top:0}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.space{justify-content:space-between}.pill{padding:5px 9px;border-radius:999px;background:#10283f;color:#9fd5ff;font-size:12px}
+.file{display:flex;align-items:center;justify-content:space-between;gap:12px}.file strong{display:block}.file span{font-size:12px;color:var(--muted)}
+.empty{padding:35px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;z-index:50;padding:20px}.modal.show{display:flex;align-items:center;justify-content:center}.dialog{background:var(--panel);border:1px solid var(--line);border-radius:18px;width:min(700px,100%);max-height:90vh;overflow:auto;padding:18px}.dialog h2{margin-top:0}.field{margin:12px 0}.field label{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}.field input,.field textarea,.field select{width:100%;background:#081525;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:11px}.field textarea{min-height:120px}
+.viewer{position:fixed;inset:0;background:#02070d;z-index:30;display:none;flex-direction:column}.viewer.show{display:flex}
+.vtop{display:flex;gap:8px;align-items:center;padding:9px;border-bottom:1px solid var(--line);background:#081525;flex-wrap:wrap}.vtop strong{flex:1;min-width:150px}
+.stage{position:relative;flex:1;overflow:auto;padding:18px;display:flex;justify-content:center;align-items:flex-start;background:#03080e}
+.pageWrap{position:relative;background:white;box-shadow:0 8px 35px rgba(0,0,0,.35);margin-bottom:30px}
+#pdfCanvas{display:block}.drawCanvas{position:absolute;left:0;top:0;touch-action:none}
+.tools{display:flex;gap:6px;flex-wrap:wrap;padding:8px;border-top:1px solid var(--line);background:#081525;align-items:center}
+.tools label{font-size:12px;color:var(--muted)}.tools input[type=range]{width:100px}
+.selected{outline:2px solid var(--accent)}
+.pageNav{display:flex;align-items:center;gap:6px;margin-left:auto}.pageNav span{min-width:70px;text-align:center}
+.note{white-space:pre-wrap;color:#dbe8f5}.stat{font-size:25px;font-weight:800}.small{font-size:12px}.mobileMenu{display:none}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#10283f;border:1px solid var(--line);padding:12px 16px;border-radius:12px;display:none;z-index:100}.toast.show{display:block}
+@media(max-width:800px){.app{display:block}aside{display:none}.mobileMenu{display:inline-block}.content{padding:14px}.top{flex-wrap:wrap}.top input{order:5;flex-basis:100%}.hero{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr}.tools{overflow:auto;flex-wrap:nowrap}.pageNav{margin-left:0}.vtop strong{flex-basis:100%}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+<div class="brand">🏗 Cantiere Pro<small>v3.5 · PDF + revisioni</small></div>
+<nav>
+<button class="active" data-section="home">⌂ Dashboard</button>
+<button data-section="drawings">📐 Disegni</button>
+<button data-section="notes">📝 Note</button>
+<button data-section="photos">📷 Foto</button>
+<button data-section="issues">🔴 Problemi</button>
+<button data-section="revisions">🔄 Revisioni</button>
+</nav>
+<hr style="border-color:var(--line);border-width:1px 0 0;margin:18px 0">
+<button id="siteBtn" style="width:100%">⚙️ Cantiere</button>
+<button id="fileHub" style="width:100%;margin-top:8px">☁️ File / iCloud</button>
+<button id="backupBtn" style="width:100%;margin-top:8px">⬇️ Backup dati</button>
+<button id="restoreBtn" style="width:100%;margin-top:8px">⬆️ Ripristina</button>
+</aside>
+<main>
+<header class="top">
+<button class="mobileMenu" id="menuBtn">☰</button>
+<input id="search" placeholder="Cerca disegni, note, problemi...">
+<button id="addPdf">＋ Disegno</button><button id="addNote">＋ Nota</button><button id="addPhoto">📷 Foto</button>
+<input id="pdfInput" type="file" accept="application/pdf" hidden>
+<input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
+<input id="restoreInput" type="file" accept="application/json" hidden>
+</header>
+<section class="content" id="content"></section>
+</main></div>
+
+<div class="modal" id="modal"><div class="dialog" id="dialog"></div></div>
+<div class="viewer" id="viewer">
+<div class="vtop">
+<button id="closeViewer">←</button><strong id="viewerTitle"></strong>
+<div class="pageNav"><button id="prevPage">‹</button><span id="pageInfo">1 / 1</span><button id="nextPage">›</button></div>
+<button id="revisionBtn" class="primary">💾 Salva REVISIONE</button>
+</div>
+<div class="stage"><div class="pageWrap" id="pageWrap"><canvas id="pdfCanvas"></canvas><canvas id="drawCanvas" class="drawCanvas"></canvas></div></div>
+<div class="tools">
+<button data-tool="pen" class="selected">✏️ Penna</button>
+<button data-tool="highlighter">🖍 Evidenziatore</button>
+<button data-tool="arrow">➜ Freccia</button>
+<button data-tool="circle">○ Cerchio</button>
+<button data-tool="text">T Testo</button>
+<button data-tool="eraser">⌫ Gomma</button>
+<button id="undo">↶ Annulla</button><button id="redo">↷ Ripristina</button><button id="clearInk">Cancella</button>
+<label>Spessore <input id="size" type="range" min="1" max="20" value="4"></label>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script type="module">
+import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
+window.pdfjsLib=pdfjsLib;
+const {PDFDocument,rgb}=window.PDFLib;
+
+const KEY="cantiereProV32";
+let db=JSON.parse(localStorage.getItem(KEY)||"null")||{site:{name:"Cantiere principale"},drawings:[],notes:[],photos:[],issues:[],revisions:[]};
+let section="home", current=null, pdfDoc=null, pageNum=1, pageCount=1, scale=1, tool="pen";
+let undoStack=[],redoStack=[],activeStroke=null,last={x:0,y:0},start={x:0,y:0},textMode=false;
+
+const $=id=>document.getElementById(id);
+function save(){localStorage.setItem(KEY,JSON.stringify(db))}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function toast(t){$("toast").textContent=t;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2600)}
+function openModal(h){$("dialog").innerHTML=h;$("modal").classList.add("show")}
+function closeModal(){$("modal").classList.remove("show")}
+$("modal").onclick=e=>{if(e.target.id==="modal")closeModal()}
+
+function render(){
+let q=$("search").value.toLowerCase();
+let html=`<div class="hero"><div><h1>${esc(db.site.name)}</h1><div class="muted">PDF, Apple Pencil, revisioni, foto e note</div></div><button class="primary" onclick="choosePdf()">＋ Aggiungi disegno</button></div>`;
+if(section==="home")html+=`<div class="grid">
+<div class="card"><div class="muted">Disegni</div><div class="stat">${db.drawings.length}</div></div>
+<div class="card"><div class="muted">Revisioni</div><div class="stat">${db.revisions.length}</div></div>
+<div class="card"><div class="muted">Foto</div><div class="stat">${db.photos.length}</div></div>
+<div class="card"><div class="muted">Problemi</div><div class="stat">${db.issues.length}</div></div></div><br>
+<div class="card"><h3>☁️ File / iCloud Drive</h3><p class="muted">Apri i PDF tramite File → iCloud Drive e salva le revisioni tramite il pannello di condivisione di iPadOS.</p><button class="primary" onclick="openFileHub()">Gestisci File / iCloud</button></div><br>
+<div class="card"><h3>Ultimi disegni</h3>${drawingList(q)}</div>`;
+else if(section==="drawings")html+=`<div class="card"><h2>📐 Disegni</h2>${drawingList(q)}</div>`;
+else if(section==="notes")html+=`<div class="card"><div class="row space"><h2>📝 Note</h2><button class="primary" onclick="newNote()">＋ Nuova nota</button></div>${noteList(q)}</div>`;
+else if(section==="photos")html+=`<div class="card"><div class="row space"><h2>📷 Foto</h2><button class="primary" onclick="$('photoInput').click()">＋ Scatta / scegli</button></div>${photoList(q)}</div>`;
+else if(section==="issues")html+=`<div class="card"><div class="row space"><h2>🔴 Problemi</h2><button class="primary" onclick="newIssue()">＋ Nuovo problema</button></div>${issueList(q)}</div>`;
+else if(section==="revisions")html+=`<div class="card"><h2>🔄 Revisioni</h2>${db.revisions.length?db.revisions.slice().reverse().map(r=>`<div class="file card" style="margin:8px 0"><div><strong>${esc(r.name)}</strong><span>${esc(r.base)} · ${esc(r.date)} · ${r.pages||1} pagine</span></div><div class="row"><span class="pill">${esc(r.rev)}</span>${r.data?`<button onclick="downloadData('${r.id}')">Esporta</button>`:""}<button onclick="deleteRevision('${r.id}')" class="danger">Elimina</button></div></div>`).join(""):`<div class="empty">Nessuna revisione.</div>`}</div>`;
+$("content").innerHTML=html;
+}
+function drawingList(q=""){let a=db.drawings.filter(x=>(x.name+" "+x.rev).toLowerCase().includes(q));return a.length?a.map(x=>`<div class="file card" style="margin:8px 0"><div><strong>${esc(x.name)}</strong><span>${esc(x.rev||"ORIGINALE")} · ${esc(x.size||"")}</span></div><div class="row"><button onclick="openDrawing('${x.id}')">Apri</button><button onclick="exportDrawing('${x.id}')">Esporta</button><button onclick="deleteDrawing('${x.id}')" class="danger">Elimina</button></div></div>`).join(""):`<div class="empty">Nessun PDF. Usa + Disegno e scegli File → iCloud Drive.</div>`}
+function noteList(q=""){let a=db.notes.filter(x=>(x.title+" "+x.text).toLowerCase().includes(q));return a.length?a.slice().reverse().map(x=>`<div class="card" style="margin:8px 0"><div class="row space"><strong>${esc(x.title)}</strong><span class="pill">${esc(x.date)}</span></div><p class="note">${esc(x.text)}</p><button onclick="deleteNote('${x.id}')" class="danger">Elimina</button></div>`).join(""):`<div class="empty">Nessuna nota.</div>`}
+function photoList(q=""){let a=db.photos.filter(x=>(x.name+" "+x.note).toLowerCase().includes(q));return a.length?a.slice().reverse().map(x=>`<div class="card" style="margin:8px 0"><img src="${x.data}" style="max-width:100%;max-height:260px;border-radius:10px;display:block"><p>${esc(x.name)}</p><div class="muted small">${esc(x.date)} · ${esc(x.note||"")}</div></div>`).join(""):`<div class="empty">Nessuna foto.</div>`}
+function issueList(q=""){let a=db.issues.filter(x=>(x.title+" "+x.text+" "+x.status).toLowerCase().includes(q));return a.length?a.slice().reverse().map(x=>`<div class="card" style="margin:8px 0"><div class="row space"><strong>${esc(x.title)}</strong><span class="pill">${esc(x.status)}</span></div><p class="note">${esc(x.text)}</p><button onclick="deleteIssue('${x.id}')" class="danger">Elimina</button></div>`).join(""):`<div class="empty">Nessun problema.</div>`}
+
+function choosePdf(){$("pdfInput").click()}
+$("addPdf").onclick=choosePdf;
+$("pdfInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;let data=await fileToDataURL(f);db.drawings.push({id:uid(),name:f.name,rev:"ORIGINALE",size:Math.round(f.size/1024)+" KB",data});save();section="drawings";render();e.target.value=""}
+function fileToDataURL(f){return new Promise((res,rej)=>{let r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
+
+async function openDrawing(id){
+current=db.drawings.find(x=>x.id===id);if(!current)return;
+$("viewerTitle").textContent=current.name+" · "+(current.rev||"ORIGINALE");
+$("viewer").classList.add("show");
+undoStack=[];redoStack=[];pageNum=1;
+try{pdfDoc=await pdfjsLib.getDocument({data:dataURLToBytes(current.data)}).promise;pageCount=pdfDoc.numPages;await renderPage()}catch(e){console.error(e);toast("Impossibile aprire il PDF");closeViewer()}
+}
+function dataURLToBytes(url){let b=atob(url.split(",")[1]);let a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a}
+async function renderPage(){
+let page=await pdfDoc.getPage(pageNum);
+let base=page.getViewport({scale:1.35});
+let maxW=Math.min(window.innerWidth-30,1050);
+scale=Math.min(1.35,maxW/base.width);
+let vp=page.getViewport({scale});
+let pc=$("pdfCanvas"),dc=$("drawCanvas"),wrap=$("pageWrap");
+pc.width=vp.width;pc.height=vp.height;pc.style.width=vp.width+"px";pc.style.height=vp.height+"px";
+dc.width=vp.width;dc.height=vp.height;dc.style.width=vp.width+"px";dc.style.height=vp.height+"px";
+wrap.style.width=vp.width+"px";wrap.style.height=vp.height+"px";
+await page.render({canvasContext:pc.getContext("2d"),viewport:vp}).promise;
+redraw();$("pageInfo").textContent=`${pageNum} / ${pageCount}`;
+}
+function point(e){let r=$("drawCanvas").getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+function begin(e){
+if(tool==="text"){let p=point(e);let t=prompt("Testo da inserire:");if(t){pushAction({type:"text",x:p.x,y:p.y,text:t,size:Math.max(14,+$("size").value*3)});redraw()}return}
+$("drawCanvas").setPointerCapture(e.pointerId);let p=point(e);start=p;last=p;activeStroke={type:tool,points:[p],size:+$("size").value};}
+function move(e){if(!activeStroke)return;let p=point(e);if(tool==="pen"||tool==="highlighter"||tool==="eraser")activeStroke.points.push(p);last=p;redrawTemp()}
+function end(){if(!activeStroke)return;if((tool==="arrow"||tool==="circle")&&start.x===last.x&&start.y===last.y){activeStroke=null;redraw();return}pushAction(activeStroke);activeStroke=null;redraw()}
+function redrawTemp(){redraw();if(!activeStroke)return;drawAction($("drawCanvas").getContext("2d"),activeStroke)}
+function pushAction(a){undoStack.push({page:pageNum,action:a});redoStack=[]}
+function redraw(){let c=$("drawCanvas"),ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);undoStack.filter(x=>x.page===pageNum).forEach(x=>drawAction(ctx,x.action));if(activeStroke)drawAction(ctx,activeStroke)}
+function drawAction(ctx,a){
+ctx.save();ctx.lineCap="round";ctx.lineJoin="round";ctx.lineWidth=a.size||4;
+if(a.type==="highlighter"){ctx.globalAlpha=.25;ctx.strokeStyle="#ffe45e";ctx.lineWidth=Math.max(12,(a.size||4)*4);drawPath(ctx,a.points)}
+else if(a.type==="pen"){ctx.strokeStyle="#ff3f67";drawPath(ctx,a.points)}
+else if(a.type==="eraser"){ctx.globalCompositeOperation="destination-out";ctx.lineWidth=Math.max(20,(a.size||4)*4);drawPath(ctx,a.points)}
+else if(a.type==="arrow"){ctx.strokeStyle="#ff3f67";ctx.lineWidth=a.size||4;ctx.beginPath();ctx.moveTo(a.x1,a.y1);ctx.lineTo(a.x2,a.y2);ctx.stroke();let ang=Math.atan2(a.y2-a.y1,a.x2-a.x1),len=12+a.size*2;ctx.beginPath();ctx.moveTo(a.x2,a.y2);ctx.lineTo(a.x2-len*Math.cos(ang-.5),a.y2-len*Math.sin(ang-.5));ctx.moveTo(a.x2,a.y2);ctx.lineTo(a.x2-len*Math.cos(ang+.5),a.y2-len*Math.sin(ang+.5));ctx.stroke()}
+else if(a.type==="circle"){ctx.strokeStyle="#ff3f67";ctx.beginPath();let cx=(a.x1+a.x2)/2,cy=(a.y1+a.y2)/2,rx=Math.abs(a.x2-a.x1)/2,ry=Math.abs(a.y2-a.y1)/2;ctx.ellipse(cx,cy,Math.max(2,rx),Math.max(2,ry),0,0,Math.PI*2);ctx.stroke()}
+else if(a.type==="text"){ctx.fillStyle="#d71945";ctx.font=`700 ${a.size||18}px -apple-system,BlinkMacSystemFont,sans-serif`;ctx.fillText(a.text,a.x,a.y)}
+ctx.restore()
+}
+function drawPath(ctx,pts){if(!pts||!pts.length)return;ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);ctx.stroke()}
+$("drawCanvas").addEventListener("pointerdown",begin);$("drawCanvas").addEventListener("pointermove",move);$("drawCanvas").addEventListener("pointerup",end);$("drawCanvas").addEventListener("pointercancel",()=>{activeStroke=null;redraw()});
+document.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>{tool=b.dataset.tool;document.querySelectorAll("[data-tool]").forEach(x=>x.classList.remove("selected"));b.classList.add("selected")});
+$("undo").onclick=()=>{let i=undoStack.map(x=>x.page).lastIndexOf(pageNum);if(i>=0){redoStack.push(undoStack.splice(i,1)[0]);redraw()}}
+$("redo").onclick=()=>{let i=redoStack.map(x=>x.page).lastIndexOf(pageNum);if(i>=0){undoStack.push(redoStack.splice(i,1)[0]);redraw()}}
+$("clearInk").onclick=()=>{undoStack=undoStack.filter(x=>x.page!==pageNum);redoStack=[];redraw()}
+$("prevPage").onclick=async()=>{if(pageNum>1){pageNum--;await renderPage()}}
+$("nextPage").onclick=async()=>{if(pageNum<pageCount){pageNum++;await renderPage()}}
+$("closeViewer").onclick=()=>{$("viewer").classList.remove("show");pdfDoc=null;current=null;undoStack=[];redoStack=[]}
+
+async function createRevision(){
+if(!current||!pdfDoc)return;
+let same=db.revisions.filter(r=>r.baseId===current.id);
+let n=same.length+1,rev="REV"+String(n).padStart(2,"0");
+let original=await PDFDocument.load(dataURLToBytes(current.data));
+let pages=original.getPages();
+let actionsByPage={};undoStack.forEach(x=>(actionsByPage[x.page]??=[]).push(x.action));
+let exported=0;
+for(let p=1;p<=pages.length;p++){
+ let actions=actionsByPage[p]||[];
+ if(!actions.length)continue;
+ let c=document.createElement("canvas");let page=pages[p-1];let pdfW=page.getWidth(),pdfH=page.getHeight();
+ let factor=Math.min(2,1200/pdfW);c.width=Math.max(1,Math.round(pdfW*factor));c.height=Math.max(1,Math.round(pdfH*factor));
+ let ctx=c.getContext("2d");ctx.scale(c.width/($("pdfCanvas").width||1),c.height/($("pdfCanvas").height||1));
+ actions.forEach(a=>drawAction(ctx,a));
+ let png=await original.embedPng(c.toDataURL("image/png"));
+ page.drawImage(png,{x:0,y:0,width:pdfW,height:pdfH});exported++;
+}
+let bytes=await original.save();
+let blob=new Blob([bytes],{type:"application/pdf"});
+let data=await blobToDataURL(blob);
+let name=current.name.replace(/\.pdf$/i,"")+"_"+rev+".pdf";
+const revisionId=uid();
+db.revisions.push({id:revisionId,baseId:current.id,base:current.name,rev,name,date:new Date().toLocaleString("it-IT"),pages:pages.length,annotatedPages:exported,data});
+save();
+current={...current,id:uid(),revisionId,name,rev,size:Math.round(blob.size/1024)+" KB",data};
+db.drawings.push(current);save();
+downloadBlob(blob,name);
+toast(`${rev} creato. Il PDF è stato esportato.`);
+render();
+}
+$("revisionBtn").onclick=createRevision;
+function blobToDataURL(blob){return new Promise((res,rej)=>{let r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob)})}
+function downloadBlob(blob,name){let a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function exportDrawing(id){let d=db.drawings.find(x=>x.id===id);if(!d)return;let bin=atob(d.data.split(",")[1]),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);downloadBlob(new Blob([u],{type:"application/pdf"}),d.name)}
+function downloadData(id){let r=db.revisions.find(x=>x.id===id);if(!r)return;let bin=atob(r.data.split(",")[1]),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);downloadBlob(new Blob([u],{type:"application/pdf"}),r.name)}
+function deleteRevision(id){
+ const r=db.revisions.find(x=>x.id===id);
+ if(!r)return;
+ if(!confirm(`Eliminare la revisione ${r.rev} di ${r.base}?\n\nIl PDF della revisione verrà rimosso anche dall'elenco Disegni dell'app.`))return;
+ const before=db.revisions.length;
+ db.revisions=db.revisions.filter(x=>x.id!==id);
+ db.drawings=db.drawings.filter(d=>{
+   if(d.revisionId===id)return false;
+   return !(d.rev===r.rev && d.name===r.name && d.data===r.data);
+ });
+ save();
+ if(current && (current.revisionId===id || (current.name===r.name && current.rev===r.rev))) current=null;
+ render();
+ toast(before!==db.revisions.length ? `${r.rev} eliminata.` : 'Revisione non trovata.');
+}
+
+function openFileHub(){openModal(`<h2>☁️ File / iCloud Drive</h2><p class="muted">Su iPad/iPhone la PWA utilizza il selettore ufficiale di iOS/iPadOS.</p><div class="card"><h3>📥 Apri PDF</h3><p class="small muted">File → iCloud Drive → scegli il PDF.</p><button class="primary" onclick="closeModal();choosePdf()">Scegli PDF</button></div><div class="card" style="margin-top:10px"><h3>📤 Salva revisione</h3><p class="small muted">Dopo aver creato una revisione, il PDF viene scaricato/aperto nel normale flusso di iOS. Scegli “Salva su File” → iCloud Drive.</p></div><div class="card" style="margin-top:10px"><h3>🗂 Struttura consigliata</h3><p class="small muted">CANTIERE PRO / NOME CANTIERE / DISEGNI ORIGINALI · REVISIONI · FOTO · NOTE</p></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Chiudi</button></div>`)}
+$("fileHub").onclick=openFileHub;
+
+function newNote(){openModal(`<h2>📝 Nuova nota</h2><div class="field"><label>Titolo</label><input id="nt"></div><div class="field"><label>Nota</label><textarea id="nx"></textarea></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button class="primary" onclick="saveNote()">Salva</button></div>`)}
+function saveNote(){db.notes.push({id:uid(),title:$("nt").value||"Nota",text:$("nx").value,date:new Date().toLocaleString("it-IT")});save();closeModal();render()}
+function deleteNote(id){db.notes=db.notes.filter(x=>x.id!==id);save();render()}
+$("addNote").onclick=newNote;
+function newIssue(){openModal(`<h2>🔴 Nuovo problema</h2><div class="field"><label>Titolo</label><input id="it"></div><div class="field"><label>Descrizione</label><textarea id="ix"></textarea></div><div class="field"><label>Stato</label><select id="is"><option>APERTO</option><option>IN LAVORAZIONE</option><option>RISOLTO</option></select></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button class="primary" onclick="saveIssue()">Salva</button></div>`)}
+function saveIssue(){db.issues.push({id:uid(),title:$("it").value||"Problema",text:$("ix").value,status:$("is").value,date:new Date().toLocaleString("it-IT")});save();closeModal();render()}
+function deleteIssue(id){db.issues=db.issues.filter(x=>x.id!==id);save();render()}
+$("addPhoto").onclick=()=>$("photoInput").click();
+$("photoInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;let data=await fileToDataURL(f);openModal(`<h2>📷 Salva foto</h2><img src="${data}" style="max-width:100%;max-height:280px;border-radius:10px"><div class="field"><label>Descrizione</label><input id="pn" value="${esc(f.name)}"></div><div class="field"><label>Nota</label><textarea id="px"></textarea></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button class="primary" onclick='savePhoto(${JSON.stringify(data)})'>Salva</button></div>`);e.target.value=""}
+function savePhoto(data){db.photos.push({id:uid(),name:$("pn").value||"Foto",note:$("px").value,date:new Date().toLocaleString("it-IT"),data});save();closeModal();render()}
+function deleteDrawing(id){if(!confirm("Eliminare questo disegno dall'app?"))return;db.drawings=db.drawings.filter(x=>x.id!==id);save();render()}
+$("siteBtn").onclick=()=>openModal(`<h2>⚙️ Cantiere</h2><div class="field"><label>Nome cantiere</label><input id="sn" value="${esc(db.site.name)}"></div><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">Annulla</button><button class="primary" onclick="db.site.name=$('sn').value||'Cantiere principale';save();closeModal();render()">Salva</button></div>`);
+$("backupBtn").onclick=()=>{let blob=new Blob([JSON.stringify(db)],{type:"application/json"});downloadBlob(blob,"cantiere-pro-backup.json")}
+$("restoreBtn").onclick=()=>$("restoreInput").click();
+$("restoreInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;try{db=JSON.parse(await f.text());save();render();toast("Backup ripristinato")}catch{toast("Backup non valido")}e.target.value=""}
+$("search").oninput=render;
+document.querySelectorAll("nav button[data-section]").forEach(b=>b.onclick=()=>{section=b.dataset.section;document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");render()});
+$("menuBtn").onclick=()=>{let a=document.querySelector("aside");a.style.display=a.style.display==="block"?"none":"block";a.style.position="fixed";a.style.zIndex="40";a.style.width="260px"};
+window.addEventListener("resize",()=>{if($("viewer").classList.contains("show")&&pdfDoc)renderPage()});
+if("serviceWorker"in navigator){ navigator.serviceWorker.register("sw.js?v=3.5",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{}); }
+window.choosePdf=choosePdf;window.openFileHub=openFileHub;window.openDrawing=openDrawing;window.exportDrawing=exportDrawing;window.deleteDrawing=deleteDrawing;window.deleteRevision=deleteRevision;window.newNote=newNote;window.saveNote=saveNote;window.deleteNote=deleteNote;window.newIssue=newIssue;window.saveIssue=saveIssue;window.deleteIssue=deleteIssue;window.savePhoto=savePhoto;window.downloadData=downloadData;
+render();
+</script>
+</body>
+</html>
